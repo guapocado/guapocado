@@ -1,0 +1,22 @@
+{
+	"name": "@guapocado/monorepo",
+	"private": true,
+	"packageManager": "pnpm@10.29.2",
+	"scripts": {
+		"build": "turbo build --ui=tui",
+		"lint": "biome check . && pnpm lint:jsdoc",
+		"lint:jsdoc": "node scripts/check-exported-jsdoc.mjs",
+		"lint:fix": "biome check --write .",
+		"typecheck": "turbo typecheck --ui=tui",
+		"test": "turbo test --ui=tui",
+		"publish:dry": "pnpm -r --filter \"./packages/*\" publish --provenance --dry-run --no-git-checks --access public"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.0",
+		"turbo": "^2.5.4",
+		"typescript": "^5.7.0"
+	},
+	"dependencies": {
+		"tslib": "^2.8.1"
+	}
+}

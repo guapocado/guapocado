@@ -1,0 +1,13 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"declaration": true,
+		"declarationMap": true,
+		"lib": ["ES2022", "DOM"],
+		"outDir": "dist",
+		"paths": {
+			"@guapocado/sdk": ["../sdk/src/index.ts"]
+		}
+	},
+	"include": ["src"]
+}

@@ -1,0 +1,26 @@
+{
+	"name": "guapocado-example-hono",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev",
+		"guap:init": "guap init --format json",
+		"guap:login:sandbox": "guap login --sandbox",
+		"guap:plan:sandbox": "guap plan --sandbox",
+		"guap:push:sandbox": "guap push --sandbox",
+		"dx:check": "pnpm typecheck && guap init --format json",
+		"typecheck": "tsc --noEmit",
+		"build": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@guapocado/cli": "workspace:*",
+		"@guapocado/hono": "workspace:*",
+		"@guapocado/sdk": "workspace:*",
+		"hono": "^4.7.0"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20250521.0",
+		"typescript": "^5.7.0",
+		"wrangler": "^4.0.0"
+	}
+}

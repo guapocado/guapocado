@@ -1,0 +1,44 @@
+{
+	"name": "@guapocado/hono",
+	"version": "0.0.3",
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": ["dist"],
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false,
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"build": "tsup src/index.ts --format esm --dts",
+		"test": "vitest run",
+		"prepublishOnly": "pnpm build"
+	},
+	"dependencies": {
+		"@guapocado/sdk": "workspace:*"
+	},
+	"peerDependencies": {
+		"hono": ">=4.0.0"
+	},
+	"devDependencies": {
+		"hono": "^4.12.21",
+		"tsup": "^8.0.0",
+		"typescript": "^5.7.0",
+		"vitest": "^4.1.7"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/guapocado/guapocado.git",
+		"directory": "packages/hono"
+	}
+}

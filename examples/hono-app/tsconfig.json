@@ -1,0 +1,12 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"lib": ["ES2022", "DOM"],
+		"types": ["@cloudflare/workers-types"],
+		"paths": {
+			"@guapocado/hono": ["../../packages/hono/src/index.ts"],
+			"@guapocado/sdk": ["../../packages/sdk/src/index.ts"]
+		}
+	},
+	"include": ["src"]
+}

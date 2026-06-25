@@ -1,0 +1,40 @@
+{
+	"name": "@guapocado/cli",
+	"version": "0.0.3",
+	"type": "module",
+	"bin": {
+		"guap": "./dist/index.js",
+		"guapocado": "./dist/index.js"
+	},
+	"files": ["dist"],
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"build": "tsup",
+		"dev": "tsup src/index.ts --format esm --watch",
+		"prepublishOnly": "pnpm build",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"citty": "^0.1.6",
+		"consola": "^3.4.0",
+		"tsx": "^4.22.3",
+		"yaml": "^2.9.0"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.1",
+		"tsup": "^8.0.0",
+		"typescript": "^5.7.0",
+		"vitest": "^4.1.7",
+		"@guapocado/shared": "workspace:*"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/guapocado/guapocado.git",
+		"directory": "packages/cli"
+	}
+}

@@ -1,0 +1,59 @@
+{
+	"name": "@guapocado/react",
+	"version": "0.0.3",
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		},
+		"./ui": {
+			"import": "./dist/ui/index.js",
+			"types": "./dist/ui/index.d.ts"
+		},
+		"./ui/primitives": {
+			"import": "./dist/ui/primitives/index.js",
+			"types": "./dist/ui/primitives/index.d.ts"
+		}
+	},
+	"files": ["dist"],
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false,
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"build": "tsup src/index.ts src/ui/index.ts src/ui/primitives/index.ts --format esm --dts --clean",
+		"prepublishOnly": "pnpm build",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@guapocado/sdk": "workspace:*",
+		"class-variance-authority": "^0.7.1",
+		"clsx": "^2.1.1",
+		"tailwind-merge": "^3.6.0"
+	},
+	"peerDependencies": {
+		"react": ">=18"
+	},
+	"devDependencies": {
+		"@types/react": "^19.2.15",
+		"react": "^19.2.6",
+		"tsup": "^8.0.0",
+		"typescript": "^5.7.0",
+		"@testing-library/react": "^16.3.0",
+		"jsdom": "^25.0.1",
+		"react-dom": "^19.2.6",
+		"vitest": "^4.1.7"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/guapocado/guapocado.git",
+		"directory": "packages/react"
+	}
+}

@@ -1,0 +1,33 @@
+{
+	"name": "guapocado-example-better-auth",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "next dev --hostname 0.0.0.0 --port 3010",
+		"dev:app": "next dev --hostname 0.0.0.0 --port 3010",
+		"dev:webhooks": "guap listen --sandbox --dev --to http://localhost:3010/api/auth/guap",
+		"guap:init": "guap init --format json",
+		"guap:login:sandbox": "guap login --sandbox",
+		"guap:plan:sandbox": "guap plan --sandbox",
+		"guap:push:sandbox": "guap push --sandbox",
+		"dx:check": "pnpm typecheck && guap init --format json",
+		"typecheck": "tsc --noEmit",
+		"build": "next build"
+	},
+	"dependencies": {
+		"@guapocado/cli": "workspace:*",
+		"@guapocado/better-auth": "workspace:*",
+		"@libsql/client": "^0.15.0",
+		"better-auth": "^1.6.11",
+		"drizzle-orm": "^0.45.2",
+		"next": "^16.1.0",
+		"react": "^19.2.6",
+		"react-dom": "^19.2.6"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.1",
+		"@types/react": "^19.2.15",
+		"@types/react-dom": "^19.2.3",
+		"typescript": "^5.7.0"
+	}
+}

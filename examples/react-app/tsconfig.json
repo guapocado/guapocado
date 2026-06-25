@@ -1,0 +1,14 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"jsx": "react-jsx",
+		"lib": ["ES2022", "DOM"],
+		"paths": {
+			"@guapocado/sdk": ["../../packages/sdk/src/index.ts"],
+			"@guapocado/react": ["../../packages/react/src/index.ts"],
+			"@guapocado/react/ui": ["../../packages/react/src/ui/index.ts"],
+			"@guapocado/react/ui/primitives": ["../../packages/react/src/ui/primitives/index.ts"]
+		}
+	},
+	"include": ["src"]
+}

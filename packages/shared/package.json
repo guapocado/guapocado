@@ -1,0 +1,39 @@
+{
+	"name": "@guapocado/shared",
+	"version": "0.0.3",
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		}
+	},
+	"files": ["dist"],
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"build": "tsup src/index.ts --format esm --dts",
+		"test": "vitest run",
+		"prepublishOnly": "pnpm build"
+	},
+	"dependencies": {
+		"zod": "^3.24.0"
+	},
+	"devDependencies": {
+		"tsup": "^8.0.0",
+		"typescript": "^5.7.0",
+		"vitest": "^4.1.7"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/guapocado/guapocado.git",
+		"directory": "packages/shared"
+	}
+}

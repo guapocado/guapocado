@@ -1,0 +1,57 @@
+name: Release
+
+# On a version tag (e.g. `git tag -a v0.0.3 && git push origin v0.0.3`):
+# build + verify, publish all packages to npm WITH provenance, then cut a GitHub Release.
+# Requires the `NPM_TOKEN` repo secret (an npm automation token with publish on @guapocado).
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # REQUIRED for npm provenance (OIDC)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - name: Verify
+        run: pnpm lint && pnpm typecheck && pnpm test
+
+      - name: Publish to npm with provenance
+        run: pnpm -r --filter "./packages/*" publish --provenance --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '
+            /^## / { if (inSection) exit; if ($2 == ver) { inSection = 1; next } }
+            inSection { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then printf "Release %s\n" "$VERSION" > RELEASE_NOTES.md; fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}

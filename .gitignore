@@ -1,0 +1,17 @@
+node_modules
+dist
+.next
+.guapocado
+.wrangler
+.dev.vars
+.env
+.env.local
+*.local
+*.tsbuildinfo
+.DS_Store
+coverage
+.turbo
+.data
+dev.db
+.claude/projects/
+.claude/scheduled_tasks.lock

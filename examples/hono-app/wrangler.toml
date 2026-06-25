@@ -1,0 +1,5 @@
+name = "guapocado-example"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+
+# GUAPOCADO_API_KEY = "sk_guap_..." # set via wrangler secret
