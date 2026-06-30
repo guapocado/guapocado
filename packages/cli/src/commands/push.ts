@@ -2,9 +2,10 @@ import { type BillingConfig, diffConfigs } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
 import { loadBillingConfig, loadCanonicalBillingConfig } from "../billing-config.js";
-import { type Environment, loadConfig, loadTargetConfig } from "../config.js";
+import { type Environment, loadConfig, loadTargetConfig, targetLabel } from "../config.js";
 import { printDiff } from "../format-diff.js";
 import { hintGitignore } from "../hints.js";
+import { resolveTargetMode, targetArgs } from "../target-args.js";
 
 export default defineCommand({
 	meta: { description: "Push billing config to Guapocado" },
@@ -13,14 +14,7 @@ export default defineCommand({
 			type: "string",
 			description: "Legacy environment name",
 		},
-		sandbox: {
-			type: "boolean",
-			description: "Push to the sandbox environment using a sk_guap_test_ key",
-		},
-		production: {
-			type: "boolean",
-			description: "Push to production using a sk_guap_live_ key",
-		},
+		...targetArgs,
 		accept: {
 			type: "boolean",
 			alias: "a",
@@ -33,14 +27,11 @@ export default defineCommand({
 		},
 	},
 	async run({ args }) {
-		if (args.sandbox && args.production) {
-			throw new Error("Choose either --sandbox or --production, not both.");
-		}
-		const config = args.sandbox
-			? loadTargetConfig("sandbox")
-			: args.production
-				? loadTargetConfig("production")
-				: loadConfig(args.env as Environment | undefined);
+		const target = resolveTargetMode(args);
+		const config = target
+			? loadTargetConfig(target)
+			: loadConfig(args.env as Environment | undefined);
+		const envLabel = target ? targetLabel(target) : config.environment;
 		hintGitignore();
 
 		const configPath = (args.config as string | undefined) ?? process.cwd();
@@ -72,11 +63,11 @@ export default defineCommand({
 
 		if (remote) {
 			const diffs = diffConfigs(local, remote);
-			printDiff(diffs, config.environment);
+			printDiff(diffs, envLabel);
 
 			if (diffs.length > 0 && !args.accept) {
 				const confirmed = await consola.prompt(
-					`Apply ${diffs.length === 1 ? "this change" : "these changes"} to ${config.environment}?`,
+					`Apply ${diffs.length === 1 ? "this change" : "these changes"} to ${envLabel}?`,
 					{ type: "confirm", initial: false },
 				);
 				if (!confirmed) {
@@ -86,7 +77,7 @@ export default defineCommand({
 			}
 		}
 
-		consola.info(`Pushing to ${config.environment}...`);
+		consola.info(`Pushing to ${envLabel}...`);
 		const res = await fetch(`${config.baseUrl}/v1/sync/push`, {
 			method: "POST",
 			headers: {
@@ -107,9 +98,7 @@ export default defineCommand({
 			stripeSynced: boolean;
 			webhookForwarding?: number;
 		};
-		consola.success(
-			`Pushed config to ${config.environment} (stripe synced: ${result.stripeSynced})`,
-		);
+		consola.success(`Pushed config to ${envLabel} (stripe synced: ${result.stripeSynced})`);
 		if (result.webhookForwarding && result.webhookForwarding > 0) {
 			consola.info(
 				`Webhook forwarding declarations: ${result.webhookForwarding}. Auto-registering integrations will register receiver URLs when the app is reachable.`,

@@ -3,8 +3,9 @@ import { resolve } from "node:path";
 import { BILLING_SCHEMA_VERSION, type BillingConfig, toCanonical } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
-import { type Environment, loadConfig } from "../config.js";
+import { type Environment, loadConfig, loadTargetConfig, targetLabel } from "../config.js";
 import { hintGitignore } from "../hints.js";
+import { resolveTargetMode, targetArgs } from "../target-args.js";
 
 function toTypeScript(config: BillingConfig): string {
 	const lines: string[] = [];
@@ -51,6 +52,7 @@ export default defineCommand({
 			type: "string",
 			description: "Environment (development, staging, production)",
 		},
+		...targetArgs,
 		format: {
 			type: "string",
 			description: "Output format: json (canonical), yaml, ts (TypeScript defineBilling wrapper)",
@@ -58,9 +60,13 @@ export default defineCommand({
 		},
 	},
 	async run({ args }) {
-		const config = loadConfig(args.env as Environment | undefined);
+		const target = resolveTargetMode(args);
+		const config = target
+			? loadTargetConfig(target)
+			: loadConfig(args.env as Environment | undefined);
+		const envLabel = target ? targetLabel(target) : config.environment;
 		hintGitignore();
-		consola.info(`Pulling from ${config.environment}...`);
+		consola.info(`Pulling from ${envLabel}...`);
 		const res = await fetch(`${config.baseUrl}/v1/sync/pull`, {
 			headers: { "x-guapocado-key": config.apiKey },
 		});

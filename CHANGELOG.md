@@ -3,6 +3,17 @@
 All notable changes to the `@guapocado/*` packages. Pre-1.0 — while on `0.0.x`, **any
 release may contain breaking changes**. Pin exact versions.
 
+## 0.0.5
+
+`@guapocado/cli` only.
+
+### Changed
+
+- **`@guapocado/cli`** — environment flags now match the platform's **test/live** vocabulary
+  (the `mode` enum and `sk_guap_test_`/`sk_guap_live_` key prefixes): `push`, `plan`, `diff`,
+  and `pull` take `--test` / `--live`. `--sandbox` / `--production` keep working as **deprecated
+  aliases** (with a warning). `guap listen` likewise accepts `--test` (live remains unsupported).
+
 ## 0.0.4
 
 `@guapocado/cli` only — the other packages are unchanged and remain at `0.0.3`.

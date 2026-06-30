@@ -12,11 +12,10 @@ npm install -g @guapocado/cli
 
 ```bash
 guap login
-guap login --sandbox
-guap login --production
 ```
 
-The CLI starts a browser/device-code flow and stores the approved target credentials in
+A single login authorizes the workspace for both the test and live environments. The CLI
+starts a browser/device-code flow and stores the approved credentials in
 `.guapocado/credentials.json` under the directory where you run `guap login`.
 
 > `.guapocado/` holds your API keys — keep it out of version control. `guap login`, `push`,
@@ -26,8 +25,10 @@ The CLI starts a browser/device-code flow and stores the approved target credent
 For CI escape hatches, an existing server key can still be saved directly:
 
 ```bash
-guap login --sandbox --key sk_guap_test_...
+guap login --key sk_guap_test_...
 ```
+
+The key prefix selects the environment (`sk_guap_test_` → test, `sk_guap_live_` → live).
 
 ## Commands
 
@@ -54,9 +55,11 @@ Push your local billing config to the Guapocado platform and sync to Stripe.
 
 ```bash
 guap push
-guap push --sandbox
-guap push --production
+guap push --test
+guap push --live
 ```
+
+`--sandbox` and `--production` still work as deprecated aliases for `--test` and `--live`.
 
 ### `guap pull`
 
@@ -64,7 +67,7 @@ Pull the current billing config from the platform and write to `billing.config.j
 
 ```bash
 guap pull
-guap pull --env production
+guap pull --live
 ```
 
 ### `guap diff`

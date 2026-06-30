@@ -2,8 +2,9 @@ import { type BillingConfig, diffConfigs } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
 import { loadBillingConfig } from "../billing-config.js";
-import { type Environment, loadConfig, loadTargetConfig } from "../config.js";
+import { type Environment, loadConfig, loadTargetConfig, targetLabel } from "../config.js";
 import { printDiff } from "../format-diff.js";
+import { resolveTargetMode, targetArgs } from "../target-args.js";
 
 export default defineCommand({
 	meta: { description: "Preview what changes a push would make" },
@@ -12,14 +13,7 @@ export default defineCommand({
 			type: "string",
 			description: "Environment (development, staging, production)",
 		},
-		sandbox: {
-			type: "boolean",
-			description: "Plan against the sandbox environment using a sk_guap_test_ key",
-		},
-		production: {
-			type: "boolean",
-			description: "Plan against production using a sk_guap_live_ key",
-		},
+		...targetArgs,
 		config: {
 			type: "string",
 			alias: "c",
@@ -27,14 +21,11 @@ export default defineCommand({
 		},
 	},
 	async run({ args }) {
-		if (args.sandbox && args.production) {
-			throw new Error("Choose either --sandbox or --production, not both.");
-		}
-		const config = args.sandbox
-			? loadTargetConfig("sandbox")
-			: args.production
-				? loadTargetConfig("production")
-				: loadConfig(args.env as Environment | undefined);
+		const target = resolveTargetMode(args);
+		const config = target
+			? loadTargetConfig(target)
+			: loadConfig(args.env as Environment | undefined);
+		const envLabel = target ? targetLabel(target) : config.environment;
 
 		const local = await loadBillingConfig((args.config as string | undefined) ?? process.cwd());
 		if (!local) {
@@ -63,6 +54,6 @@ export default defineCommand({
 		const data = (await res.json()) as { config: BillingConfig };
 
 		const diffs = diffConfigs(local, data.config);
-		printDiff(diffs, config.environment);
+		printDiff(diffs, envLabel);
 	},
 });

@@ -5,9 +5,9 @@
 	"scripts": {
 		"dev": "vite --host 0.0.0.0",
 		"guap:init": "guap init --format json",
-		"guap:login:sandbox": "guap login --sandbox",
-		"guap:plan:sandbox": "guap plan --sandbox",
-		"guap:push:sandbox": "guap push --sandbox",
+		"guap:login": "guap login",
+		"guap:plan:test": "guap plan --test",
+		"guap:push:test": "guap push --test",
 		"dx:check": "pnpm typecheck && guap init --format json",
 		"typecheck": "tsc --noEmit",
 		"build": "tsc --noEmit && vite build"
