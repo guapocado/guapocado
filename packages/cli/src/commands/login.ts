@@ -8,6 +8,7 @@ import {
 	upsertWorkspaceKey,
 	writeStoredConfig,
 } from "../config.js";
+import { hintGitignore } from "../hints.js";
 
 function openBrowser(url: string): boolean {
 	const command =
@@ -50,6 +51,7 @@ export default defineCommand({
 				environments: { ...existing.environments, [envTarget]: { apiKey: args.key } },
 			});
 			consola.success(`Credentials saved to ${path}`);
+			hintGitignore();
 			return;
 		}
 
@@ -122,6 +124,7 @@ export default defineCommand({
 			consola.success(
 				`Logged in to ${token.workspaceName ?? workspaceId} (${envs}). Saved to ${path}`,
 			);
+			hintGitignore();
 			return;
 		}
 

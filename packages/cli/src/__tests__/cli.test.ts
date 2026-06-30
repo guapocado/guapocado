@@ -1,9 +1,16 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { DiffEntry } from "@guapocado/shared";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	assertTargetKey,
 	getActiveWorkspaceId,
+	isGuapocadoGitignored,
 	listWorkspaces,
+	maskApiKey,
+	readDotEnvApiKey,
 	resolveStoredKey,
 	setActiveWorkspace,
 	upsertWorkspaceKey,
@@ -122,5 +129,77 @@ describe("workspace credentials", () => {
 		).toBe("sk_guap_test_legacy");
 		expect(resolveStoredKey({ apiKey: "sk_flat" }, "production")?.apiKey).toBe("sk_flat");
 		expect(resolveStoredKey({}, "sandbox")).toBeNull();
+	});
+});
+
+describe("maskApiKey", () => {
+	it("keeps the server-key prefix and last 4 chars, hiding the rest", () => {
+		const masked = maskApiKey("sk_guap_test_abcdef1234");
+		expect(masked).toBe("sk_guap_test_…1234");
+		expect(masked).not.toContain("abcdef");
+		expect(maskApiKey("sk_guap_live_zzzz9876")).toBe("sk_guap_live_…9876");
+	});
+
+	it("handles unknown shapes and empties without throwing", () => {
+		expect(maskApiKey("")).toBe("(none)");
+		expect(maskApiKey("abcdef")).toBe("abcd…cdef");
+	});
+});
+
+describe("readDotEnvApiKey", () => {
+	let dir: string;
+
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), "guap-env-"));
+	});
+
+	afterEach(() => {
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("returns the GUAPOCADO_API_KEY from .env", () => {
+		writeFileSync(join(dir, ".env"), 'GUAPOCADO_API_KEY="sk_guap_test_fromenv"\nOTHER=1\n');
+		expect(readDotEnvApiKey(dir)).toBe("sk_guap_test_fromenv");
+	});
+
+	it("returns null when there is no .env or no key", () => {
+		expect(readDotEnvApiKey(dir)).toBeNull();
+		writeFileSync(join(dir, ".env"), "OTHER=1\n");
+		expect(readDotEnvApiKey(dir)).toBeNull();
+	});
+});
+
+describe("isGuapocadoGitignored", () => {
+	let dir: string;
+
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), "guap-cli-"));
+		execFileSync("git", ["init", "-q"], { cwd: dir });
+		mkdirSync(join(dir, ".guapocado"));
+	});
+
+	afterEach(() => {
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("returns false when .guapocado is not gitignored", () => {
+		writeFileSync(join(dir, ".gitignore"), "node_modules\n");
+		expect(isGuapocadoGitignored(dir)).toBe(false);
+	});
+
+	it("returns true for both .guapocado and .guapocado/ patterns", () => {
+		writeFileSync(join(dir, ".gitignore"), ".guapocado/\n");
+		expect(isGuapocadoGitignored(dir)).toBe(true);
+		writeFileSync(join(dir, ".gitignore"), ".guapocado\n");
+		expect(isGuapocadoGitignored(dir)).toBe(true);
+	});
+
+	it("returns null outside a git repo", () => {
+		const plain = mkdtempSync(join(tmpdir(), "guap-plain-"));
+		try {
+			expect(isGuapocadoGitignored(plain)).toBeNull();
+		} finally {
+			rmSync(plain, { recursive: true, force: true });
+		}
 	});
 });

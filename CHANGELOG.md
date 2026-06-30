@@ -3,6 +3,18 @@
 All notable changes to the `@guapocado/*` packages. Pre-1.0 — while on `0.0.x`, **any
 release may contain breaking changes**. Pin exact versions.
 
+## 0.0.4
+
+`@guapocado/cli` only — the other packages are unchanged and remain at `0.0.3`.
+
+### Added
+
+- **`@guapocado/cli`** — `guap whoami` prints the active workspace and the credentials in use
+  (keys masked), reading `.guapocado/credentials.json` and falling back to `GUAPOCADO_API_KEY`
+  in `.env`.
+- **`@guapocado/cli`** — `guap login`, `push`, and `pull` now warn when `.guapocado/` (which
+  holds your API keys) isn't git-ignored, with a one-line fix to add it to `.gitignore`.
+
 ## 0.0.3
 
 First release published from this public source-of-truth repository, with **npm provenance**

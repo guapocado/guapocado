@@ -9,6 +9,7 @@ const main = defineCommand({
 	subCommands: {
 		init: () => import("./commands/init.js").then((m) => m.default),
 		login: () => import("./commands/login.js").then((m) => m.default),
+		whoami: () => import("./commands/whoami.js").then((m) => m.default),
 		workspace: () => import("./commands/workspace.js").then((m) => m.default),
 		pull: () => import("./commands/pull.js").then((m) => m.default),
 		push: () => import("./commands/push.js").then((m) => m.default),

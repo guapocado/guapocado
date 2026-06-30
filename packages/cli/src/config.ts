@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -49,6 +50,23 @@ export function ensureLocalCredentialsDir(cwd = process.cwd()): string {
 	const configDir = join(cwd, ".guapocado");
 	mkdirSync(configDir, { recursive: true });
 	return join(configDir, "credentials.json");
+}
+
+/**
+ * Whether `.guapocado/` — which holds API keys — is git-ignored in `cwd`.
+ * Returns `null` when it can't be determined (git isn't installed, or `cwd`
+ * isn't a git repo) so callers can stay silent rather than nag. A trailing
+ * `.guapocado` or `.guapocado/` pattern both resolve to `true`.
+ */
+export function isGuapocadoGitignored(cwd = process.cwd()): boolean | null {
+	const result = spawnSync("git", ["check-ignore", "-q", ".guapocado"], {
+		cwd,
+		stdio: "ignore",
+	});
+	if (result.error) return null; // git not on PATH
+	if (result.status === 0) return true; // ignored
+	if (result.status === 1) return false; // tracked / not ignored
+	return null; // 128 = not a repo, or anything unexpected
 }
 
 export function readStoredConfig(cwd = process.cwd()): StoredConfig {
@@ -128,6 +146,14 @@ function targetKeyPrefix(target: TargetMode): string {
 	return target === "sandbox" ? "sk_guap_test_" : "sk_guap_live_";
 }
 
+/** Mask a key for display — keeps the `sk_guap_test_`/`live_` prefix and last 4 chars. */
+export function maskApiKey(apiKey: string): string {
+	if (!apiKey) return "(none)";
+	const prefix = apiKey.match(/^sk_guap_(?:test|live)_/)?.[0] ?? apiKey.slice(0, 4);
+	const last4 = apiKey.length > 4 ? apiKey.slice(-4) : "";
+	return last4 ? `${prefix}…${last4}` : prefix;
+}
+
 function parseDotEnv(raw: string): DotEnv {
 	const env: DotEnv = {};
 	for (const line of raw.split(/\r?\n/)) {
@@ -147,12 +173,15 @@ function parseDotEnv(raw: string): DotEnv {
 	return env;
 }
 
-function loadDotEnvConfig(env?: Environment): CliConfig | null {
-	const envPath = join(process.cwd(), ".env");
+/** The `GUAPOCADO_API_KEY` from a local `.env`, or `null` when absent. */
+export function readDotEnvApiKey(cwd = process.cwd()): string | null {
+	const envPath = join(cwd, ".env");
 	if (!existsSync(envPath)) return null;
+	return parseDotEnv(readFileSync(envPath, "utf-8")).GUAPOCADO_API_KEY ?? null;
+}
 
-	const local = parseDotEnv(readFileSync(envPath, "utf-8"));
-	const apiKey = local.GUAPOCADO_API_KEY;
+function loadDotEnvConfig(env?: Environment): CliConfig | null {
+	const apiKey = readDotEnvApiKey();
 	if (!apiKey) return null;
 
 	return {

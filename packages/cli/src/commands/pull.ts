@@ -4,6 +4,7 @@ import { BILLING_SCHEMA_VERSION, type BillingConfig, toCanonical } from "@guapoc
 import { defineCommand } from "citty";
 import consola from "consola";
 import { type Environment, loadConfig } from "../config.js";
+import { hintGitignore } from "../hints.js";
 
 function toTypeScript(config: BillingConfig): string {
 	const lines: string[] = [];
@@ -58,6 +59,7 @@ export default defineCommand({
 	},
 	async run({ args }) {
 		const config = loadConfig(args.env as Environment | undefined);
+		hintGitignore();
 		consola.info(`Pulling from ${config.environment}...`);
 		const res = await fetch(`${config.baseUrl}/v1/sync/pull`, {
 			headers: { "x-guapocado-key": config.apiKey },

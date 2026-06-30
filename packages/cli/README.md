@@ -19,6 +19,10 @@ guap login --production
 The CLI starts a browser/device-code flow and stores the approved target credentials in
 `.guapocado/credentials.json` under the directory where you run `guap login`.
 
+> `.guapocado/` holds your API keys — keep it out of version control. `guap login`, `push`,
+> and `pull` warn when it isn't gitignored. Run `guap whoami` to see which workspace and keys
+> are currently active.
+
 For CI escape hatches, an existing server key can still be saved directly:
 
 ```bash
@@ -33,6 +37,15 @@ Scaffold a `billing.config.ts` in the current directory with example plans and e
 
 ```bash
 guap init
+```
+
+### `guap whoami`
+
+Show the active workspace and the credentials in use (keys are masked). Reads
+`.guapocado/credentials.json`, falling back to `GUAPOCADO_API_KEY` in `.env`.
+
+```bash
+guap whoami
 ```
 
 ### `guap push`

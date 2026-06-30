@@ -4,6 +4,7 @@ import consola from "consola";
 import { loadBillingConfig, loadCanonicalBillingConfig } from "../billing-config.js";
 import { type Environment, loadConfig, loadTargetConfig } from "../config.js";
 import { printDiff } from "../format-diff.js";
+import { hintGitignore } from "../hints.js";
 
 export default defineCommand({
 	meta: { description: "Push billing config to Guapocado" },
@@ -40,6 +41,7 @@ export default defineCommand({
 			: args.production
 				? loadTargetConfig("production")
 				: loadConfig(args.env as Environment | undefined);
+		hintGitignore();
 
 		const configPath = (args.config as string | undefined) ?? process.cwd();
 		const [local, canonical] = await Promise.all([
