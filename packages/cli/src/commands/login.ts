@@ -5,6 +5,7 @@ import {
 	type TargetMode,
 	ensureLocalCredentialsDir,
 	readStoredConfig,
+	targetLabel,
 	upsertWorkspaceKey,
 	writeStoredConfig,
 } from "../config.js";
@@ -120,7 +121,7 @@ export default defineCommand({
 				});
 			}
 			const path = writeStoredConfig(config);
-			const envs = entries.map(([t]) => t).join(" + ") || "no environments";
+			const envs = entries.map(([t]) => targetLabel(t)).join(" + ") || "no environments";
 			consola.success(
 				`Logged in to ${token.workspaceName ?? workspaceId} (${envs}). Saved to ${path}`,
 			);

@@ -146,6 +146,16 @@ function targetKeyPrefix(target: TargetMode): string {
 	return target === "sandbox" ? "sk_guap_test_" : "sk_guap_live_";
 }
 
+/**
+ * User-facing label for a target. The CLI surface speaks test/live (matching the
+ * platform's mode enum and `sk_guap_test_`/`sk_guap_live_` key prefixes); the
+ * internal `TargetMode` and on-disk credential keys stay sandbox/production so
+ * existing logins keep working.
+ */
+export function targetLabel(target: TargetMode): "test" | "live" {
+	return target === "sandbox" ? "test" : "live";
+}
+
 /** Mask a key for display — keeps the `sk_guap_test_`/`live_` prefix and last 4 chars. */
 export function maskApiKey(apiKey: string): string {
 	if (!apiKey) return "(none)";
@@ -195,7 +205,7 @@ export function assertTargetKey(apiKey: string, target: TargetMode): void {
 	const prefix = targetKeyPrefix(target);
 	if (!apiKey.startsWith(prefix)) {
 		throw new Error(
-			`${target} pushes require a ${prefix} server key. Run guap login from this project or configure .guapocado/credentials.json environments.${target}.`,
+			`The ${targetLabel(target)} environment requires a ${prefix} server key. Run \`guap login\` to authorize it.`,
 		);
 	}
 }

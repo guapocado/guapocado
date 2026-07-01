@@ -330,13 +330,21 @@ export default defineCommand({
 			description: "Local webhook URL to forward to",
 			default: DEFAULT_LOCAL_URL,
 		},
+		test: {
+			type: "boolean",
+			description: "Listen for test webhooks (the default).",
+		},
+		live: {
+			type: "boolean",
+			description: "Not supported. The dev relay never forwards live webhooks.",
+		},
 		sandbox: {
 			type: "boolean",
-			description: "Listen for sandbox webhooks.",
+			description: "Deprecated alias for --test.",
 		},
 		production: {
 			type: "boolean",
-			description: "Not supported. Dev relay never forwards production webhooks.",
+			description: "Deprecated alias for --live (unsupported).",
 		},
 		dev: {
 			type: "boolean",
@@ -357,11 +365,10 @@ export default defineCommand({
 		},
 	},
 	async run({ args }) {
-		if (args.production) {
-			throw new Error("guap listen is dev-only and only supports sandbox webhooks.");
-		}
-		if (args.sandbox === false) {
-			consola.info("Defaulting to sandbox mode. Production relay is intentionally unsupported.");
+		if (args.sandbox) consola.warn("`--sandbox` is deprecated; use `--test`.");
+		if (args.production) consola.warn("`--production` is deprecated; use `--live`.");
+		if (args.live || args.production) {
+			throw new Error("`guap listen` is dev-only and only supports the test environment.");
 		}
 
 		const localUrl = String(args.to);

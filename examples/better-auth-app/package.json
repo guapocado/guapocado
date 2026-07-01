@@ -5,11 +5,11 @@
 	"scripts": {
 		"dev": "next dev --hostname 0.0.0.0 --port 3010",
 		"dev:app": "next dev --hostname 0.0.0.0 --port 3010",
-		"dev:webhooks": "guap listen --sandbox --dev --to http://localhost:3010/api/auth/guap",
+		"dev:webhooks": "guap listen --test --dev --to http://localhost:3010/api/auth/guap",
 		"guap:init": "guap init --format json",
-		"guap:login:sandbox": "guap login --sandbox",
-		"guap:plan:sandbox": "guap plan --sandbox",
-		"guap:push:sandbox": "guap push --sandbox",
+		"guap:login": "guap login",
+		"guap:plan:test": "guap plan --test",
+		"guap:push:test": "guap push --test",
 		"dx:check": "pnpm typecheck && guap init --format json",
 		"typecheck": "tsc --noEmit",
 		"build": "next build"
