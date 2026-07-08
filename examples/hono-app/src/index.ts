@@ -14,6 +14,11 @@ import { Hono } from "hono";
 
 type Bindings = {
 	GUAPOCADO_API_KEY: string;
+	// Publicly reachable base URL for this Worker (e.g.
+	// "https://guapocado-example.<subdomain>.workers.dev"), used to register
+	// the webhook endpoint. Required for auto-registration — the SDK never
+	// derives the registration URL from request data by default.
+	GUAPOCADO_PUBLIC_URL: string;
 };
 
 type AppEnv = GuapocadoHonoEnv<{ Bindings: Bindings }>;
@@ -22,11 +27,11 @@ const app = new Hono<AppEnv>();
 
 // Lazily create one store-backed local read model per Worker isolate, keyed
 // off the first request's API key (there is only ever one key per deployed
-// Worker). Set `webhook.publicUrl` in production for proxy-safe registration;
-// it falls back to the incoming request's own URL otherwise.
+// Worker). `webhook.publicUrl` is required for auto-registration to run at
+// all — set GUAPOCADO_PUBLIC_URL to this Worker's public URL.
 let local: GuapLocal | undefined;
-function getLocal(apiKey: string): GuapLocal {
-	local ??= createGuapLocal({ apiKey });
+function getLocal(apiKey: string, publicUrl: string): GuapLocal {
+	local ??= createGuapLocal({ apiKey, webhook: { publicUrl: `${publicUrl}/webhooks/guap` } });
 	return local;
 }
 
@@ -35,7 +40,14 @@ app.use("*", async (c, next) => {
 	const customerId = c.req.query("customerId");
 	// Wire the same local read model in as the client's adapter, so entitlement
 	// reads become local-first once webhook events start flowing.
-	c.set("guap", createGuapocadoClient({ apiKey, customerId, adapter: getLocal(apiKey).adapter }));
+	c.set(
+		"guap",
+		createGuapocadoClient({
+			apiKey,
+			customerId,
+			adapter: getLocal(apiKey, c.env.GUAPOCADO_PUBLIC_URL).adapter,
+		}),
+	);
 	if (customerId) c.set("guapCustomerId", customerId);
 	await next();
 });
@@ -49,7 +61,7 @@ async function sendCancellationEmail(ctx: GuapCancelHookContext): Promise<void> 
 // function reference (onCancel) and an inline lambda (onPurchase) fully
 // type-check with zero annotations.
 app.all("/webhooks/guap", (c) =>
-	guapLocalHandler(getLocal(c.env.GUAPOCADO_API_KEY), {
+	guapLocalHandler(getLocal(c.env.GUAPOCADO_API_KEY, c.env.GUAPOCADO_PUBLIC_URL), {
 		onCancel: sendCancellationEmail,
 		onPurchase: async (ctx) => {
 			console.log(`customer ${ctx.customerId} purchased ${ctx.purchase.productKey}`, ctx.grants);

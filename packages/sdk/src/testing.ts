@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { GuapStore, GuapStoreRecord } from "./local.js";
 
+// Test-only subpath: this module imports `vitest`, so only import `@guapocado/sdk/testing` from test files, never from application/production code.
+
 /**
  * Runs a shared vitest contract suite against any {@link GuapStore}
  * implementation — get/put/delete/prefix-scan/overwrite semantics — so a

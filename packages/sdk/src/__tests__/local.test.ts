@@ -340,6 +340,31 @@ describe("project() — per-event projection", () => {
 			status: "past_due",
 		});
 	});
+
+	it("a malformed createdAt sources to timestamp 0, losing LWW against an existing, validly-timestamped record", async () => {
+		const store = createMemoryGuapStore();
+		const local = createGuapLocal({ apiKey: "sk_test", store, webhook: { autoRegister: false } });
+
+		await local.project(
+			subscriptionUpdated("active", "pro", { createdAt: "2026-01-01T00:00:00.000Z" }),
+		);
+		// A malformed createdAt must lose the conflict, not win it — Date.now()
+		// fallback would let garbage input overwrite legitimate state.
+		await local.project(subscriptionUpdated("canceled", "pro", { createdAt: "not-a-real-date" }));
+
+		expect((await store.get("subscriptions", "cus_1"))?.value).toMatchObject({ status: "active" });
+	});
+
+	it("a malformed createdAt still performs the first write on an empty key", async () => {
+		const store = createMemoryGuapStore();
+		const local = createGuapLocal({ apiKey: "sk_test", store, webhook: { autoRegister: false } });
+
+		await local.project(subscriptionUpdated("active", "pro", { createdAt: "not-a-real-date" }));
+
+		const record = await store.get("subscriptions", "cus_1");
+		expect(record?.value).toMatchObject({ status: "active" });
+		expect(record?.sourceTs).toBe(0);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -657,6 +682,61 @@ describe("handler — webhook ingest", () => {
 		);
 	});
 
+	it("returns 500 when the dedup marker write fails, and does not treat a subsequent successful delivery as a duplicate", async () => {
+		const onError = vi.fn();
+		const memory = createMemoryGuapStore();
+		let failNextEventsPut = true;
+		const store: GuapStore = {
+			get: (collection, id) => memory.get(collection, id),
+			put: async (collection, id, record) => {
+				if (collection === "events" && failNextEventsPut) {
+					failNextEventsPut = false;
+					throw new Error("marker write failed");
+				}
+				return memory.put(collection, id, record);
+			},
+			delete: (collection, id) => memory.delete(collection, id),
+			listByPrefix: (collection, idPrefix) => memory.listByPrefix(collection, idPrefix),
+		};
+		await store.put("meta", "registration", {
+			value: {
+				id: "wh_1",
+				url: "https://app.example.com/guap",
+				events: "*",
+				status: "active",
+				signingSecret: secret,
+			},
+			sourceTs: 0,
+			writtenAt: 0,
+		});
+
+		const local = createGuapLocal({
+			apiKey: "sk_test",
+			store,
+			onError,
+			webhook: { autoRegister: false },
+		});
+		const onCustomerUpdated = vi.fn();
+		const body = JSON.stringify(customerUpdated({ id: "evt_marker_fail" }));
+		const signature = await signPayload(secret, body);
+
+		const first = await local.handler({ onCustomerUpdated })(postRequest(body, signature));
+		expect(first.status).toBe(500);
+		expect(onError).toHaveBeenCalledWith(
+			expect.any(Error),
+			expect.objectContaining({ scope: "store", detail: "dedup marker write" }),
+		);
+		expect(onCustomerUpdated).toHaveBeenCalledTimes(1); // hook already ran before the marker write failed
+		expect(await store.get("events", "evt_marker_fail")).toBeNull(); // marker never landed
+
+		// The platform retries; this redelivery is NOT deduplicated (no marker was
+		// ever written), the hook re-fires, and the delivery now succeeds.
+		const second = await local.handler({ onCustomerUpdated })(postRequest(body, signature));
+		expect(second.status).toBe(200);
+		expect(await second.json()).toEqual({ received: true });
+		expect(onCustomerUpdated).toHaveBeenCalledTimes(2);
+	});
+
 	it("returns 405 for methods other than GET/POST", async () => {
 		const store = await seededStore(secret);
 		const local = createGuapLocal({ apiKey: "sk_test", store, webhook: { autoRegister: false } });
@@ -674,6 +754,116 @@ describe("handler — webhook ingest", () => {
 		);
 		expect(res.status).toBe(200);
 		expect(await res.json()).toMatchObject({ ok: true, registered: true, status: "active" });
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Registration URL resolution — publicUrl is required for auto-registration
+// ---------------------------------------------------------------------------
+
+describe("registration URL resolution", () => {
+	it("POST: skips auto-registration and reports onError when no publicUrl is configured", async () => {
+		const store = createMemoryGuapStore();
+		const onError = vi.fn();
+		const local = createGuapLocal({ apiKey: "sk_test", store, onError }); // autoRegister defaults true; no webhook.publicUrl
+		const body = JSON.stringify(customerUpdated());
+		const res = await local.handler()(postRequest(body, null));
+
+		// No signing secret was ever obtained, so the delivery can't verify.
+		expect(res.status).toBe(401);
+		expect(onError).toHaveBeenCalledWith(
+			expect.any(Error),
+			expect.objectContaining({
+				scope: "registration",
+				detail: "no publicUrl configured — set webhook.publicUrl to enable auto-registration",
+			}),
+		);
+		// Never registered — in particular, never registered from request.url.
+		expect(await store.get("meta", "registration")).toBeNull();
+	});
+
+	it("GET: skips auto-registration, reports onError, and surfaces request.url only as a suggestedUrl hint", async () => {
+		const store = createMemoryGuapStore();
+		const onError = vi.fn();
+		const local = createGuapLocal({ apiKey: "sk_test", store, onError });
+		const res = await local.handler()(
+			new Request("https://app.example.com/guap", { method: "GET" }),
+		);
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toMatchObject({
+			ok: true,
+			registered: false,
+			suggestedUrl: "https://app.example.com/guap",
+		});
+		expect(onError).toHaveBeenCalledWith(
+			expect.any(Error),
+			expect.objectContaining({
+				scope: "registration",
+				detail: "no publicUrl configured — set webhook.publicUrl to enable auto-registration",
+			}),
+		);
+		expect(await store.get("meta", "registration")).toBeNull();
+	});
+
+	describe("trustForwardedHost", () => {
+		let fetchMock: ReturnType<typeof vi.fn>;
+		beforeEach(() => {
+			fetchMock = vi.fn(async () =>
+				jsonResponse({
+					id: "wh_forwarded",
+					status: "pending_approval",
+					url: "https://forwarded.example.com/guap",
+					events: "*",
+					signingSecret: "whsec_forwarded",
+				}),
+			);
+			vi.stubGlobal("fetch", fetchMock);
+		});
+		afterEach(() => vi.unstubAllGlobals());
+
+		it("honors the x-guapocado-public-url header when trustForwardedHost is true", async () => {
+			const store = createMemoryGuapStore();
+			const local = createGuapLocal({
+				apiKey: "sk_test",
+				store,
+				webhook: { trustForwardedHost: true },
+			});
+			const request = new Request("https://app.example.com/guap", {
+				method: "GET",
+				headers: { "x-guapocado-public-url": "https://forwarded.example.com/guap" },
+			});
+
+			const res = await local.handler()(request);
+			expect(res.status).toBe(200);
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+			const requestedBody = JSON.parse(init.body as string);
+			expect(requestedBody.url).toBe("https://forwarded.example.com/guap"); // not request.url
+			expect(await res.json()).toMatchObject({
+				ok: true,
+				registered: true,
+				status: "pending_approval",
+			});
+		});
+
+		it("ignores the header (and skips registration) when trustForwardedHost is not set", async () => {
+			const store = createMemoryGuapStore();
+			const onError = vi.fn();
+			const local = createGuapLocal({ apiKey: "sk_test", store, onError }); // trustForwardedHost defaults false
+			const request = new Request("https://app.example.com/guap", {
+				method: "GET",
+				headers: { "x-guapocado-public-url": "https://forwarded.example.com/guap" },
+			});
+
+			const res = await local.handler()(request);
+			expect(fetchMock).not.toHaveBeenCalled();
+			expect(await res.json()).toMatchObject({ ok: true, registered: false });
+			expect(onError).toHaveBeenCalledWith(
+				expect.any(Error),
+				expect.objectContaining({ scope: "registration" }),
+			);
+		});
 	});
 });
 
@@ -825,6 +1015,62 @@ describe("webhook hooks", () => {
 		const ctx: GuapPurchaseHookContext = onPurchase.mock.calls[0]?.[0];
 		expect(ctx.purchase.id).toBe("pur_1");
 		expect(ctx.grants).toHaveLength(1);
+	});
+
+	it("an LWW-rejected subscription event fires the raw hook + onEvent but not semantic hooks, and does not invalidate features/limits (stale canceled-after-active)", async () => {
+		const store = await seededStore(secret);
+		await store.put("features", "cus_1:advanced-analytics", {
+			value: true,
+			sourceTs: 1,
+			writtenAt: 1,
+		});
+		await store.put("limits", "cus_1:seats", { value: { limit: 5 }, sourceTs: 1, writtenAt: 1 });
+
+		const local = createGuapLocal({ apiKey: "sk_test", store, webhook: { autoRegister: false } });
+		const onSubscriptionUpdated = vi.fn();
+		const onEvent = vi.fn();
+		const onSubscribe = vi.fn();
+		const onCancel = vi.fn();
+		const hooks = { onSubscriptionUpdated, onEvent, onSubscribe, onCancel };
+
+		// Newer "active" event arrives first and is accepted — customer subscribes.
+		await post(
+			local,
+			subscriptionUpdated("active", "pro", {
+				id: "evt_active",
+				createdAt: "2026-01-05T00:00:00.000Z",
+			}),
+			hooks,
+		);
+		expect(onSubscribe).toHaveBeenCalledTimes(1);
+		onSubscriptionUpdated.mockClear();
+		onEvent.mockClear();
+
+		// A delayed "canceled" event with an OLDER createdAt arrives late — LWW
+		// rejects the write (this is the exact stale-canceled-after-active scenario).
+		const res = await post(
+			local,
+			subscriptionUpdated("canceled", "pro", {
+				id: "evt_stale_cancel",
+				createdAt: "2026-01-01T00:00:00.000Z",
+			}),
+			hooks,
+		);
+		expect(res.status).toBe(200);
+
+		// Store state is unaffected by the rejected write.
+		expect((await store.get("subscriptions", "cus_1"))?.value).toMatchObject({ status: "active" });
+		expect(await store.get("features", "cus_1:advanced-analytics")).not.toBeNull();
+		expect(await store.get("limits", "cus_1:seats")).not.toBeNull();
+
+		// Raw per-type hook and onEvent are the at-least-once event log — they
+		// still fire for this authentic (verified, non-deduplicated) delivery.
+		expect(onSubscriptionUpdated).toHaveBeenCalledTimes(1);
+		expect(onEvent).toHaveBeenCalledTimes(1);
+
+		// Semantic hooks report a state transition that never happened here —
+		// they must not fire for a delivery LWW rejected.
+		expect(onCancel).not.toHaveBeenCalled();
 	});
 
 	it("a throwing hook causes a 500, does not write the dedup marker, and re-fires on redelivery", async () => {

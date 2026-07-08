@@ -3,3 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2025-05-01"
 
 # GUAPOCADO_API_KEY = "sk_guap_..." # set via wrangler secret
+
+[vars]
+# Publicly reachable base URL for this Worker, used to register the webhook
+# endpoint (@guapocado/sdk requires webhook.publicUrl for auto-registration —
+# it never derives the registration URL from request data). Update after your
+# first `wrangler deploy` to the assigned workers.dev URL (or a custom domain).
+GUAPOCADO_PUBLIC_URL = "https://guapocado-example.workers.dev"

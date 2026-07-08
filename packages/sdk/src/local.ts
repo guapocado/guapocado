@@ -243,9 +243,23 @@ export type GuapPurchaseHookContext = GuapHookContext<GuapPurchaseCompletedData>
  * a catch-all `onEvent` for every event (including unknown/future types); raw
  * per-event hooks (`onCustomerUpdated`, `onSubscriptionUpdated`, …) typed to
  * the event's `data` shape; and semantic transition hooks (`onSubscribe`,
- * `onCancel`, `onPlanChange`, `onPurchase`) derived from the previously
- * stored record, so "did this customer just subscribe/cancel/upgrade" needs
- * no polling or diffing in your own code.
+ * `onCancel`, `onPlanChange`) derived from the previously stored record, so
+ * "did this customer just subscribe/cancel/upgrade" needs no polling or
+ * diffing in your own code.
+ *
+ * **Two-tier delivery contract.** `onEvent` and the raw per-event hooks are
+ * the at-least-once *event log*: they fire on every authentic
+ * (signature-verified, non-deduplicated) delivery — including one that
+ * last-write-wins conflict resolution goes on to reject as stale (e.g. a
+ * delayed `subscription.updated` that arrives after a newer event already
+ * advanced the stored state). `onSubscribe`, `onCancel`, and `onPlanChange`
+ * fire only when that delivery's write was actually *applied* to the store; a
+ * superseded/rejected delivery changed nothing, so there is no real
+ * transition to report and these hooks are skipped for it. Write the raw
+ * tier and `onEvent` defensively (they may describe events the store no
+ * longer reflects); the semantic tier can be trusted to match current state.
+ * `onPurchase` (the `purchase.completed` alias) is not gated this way — like
+ * the raw tier, it fires on every authentic delivery.
  *
  * Hooks run **after** projection but **before** the dedup marker is written,
  * so a throwing hook causes a 500 and the platform's at-least-once retry will
@@ -289,14 +303,35 @@ export type GuapLocalOptions = {
 	maxAgeMs?: number;
 	/** Webhook registration/ingest configuration. */
 	webhook?: {
-		/** Publicly reachable URL for this handler; required for auto-registration behind a proxy/load balancer. */
+		/**
+		 * Publicly reachable URL for this handler. **Required for
+		 * auto-registration** — without it (and without `trustForwardedHost`),
+		 * auto-registration is skipped entirely (see {@link createGuapLocal}'s
+		 * auto-registration section) rather than guessing a URL from request
+		 * data.
+		 */
 		publicUrl?: string;
+		/**
+		 * Allow deriving the registration URL from the
+		 * `x-guapocado-public-url` request header when `publicUrl` is not set.
+		 * Defaults to `false`.
+		 *
+		 * **Security note:** this header is attacker-controlled on any request
+		 * that reaches your handler unless your proxy/load balancer strips it
+		 * before forwarding (or only ever sets it itself). Registering a
+		 * webhook endpoint at a URL derived from untrusted request data lets a
+		 * caller redirect where Guapocado delivers your events. Only set this
+		 * to `true` if you control every hop up to this handler and can
+		 * guarantee the header isn't attacker-settable — otherwise set
+		 * `publicUrl` explicitly instead.
+		 */
+		trustForwardedHost?: boolean;
 		/** Domain events to subscribe to. Defaults to `"*"` (all). */
 		events?: "*" | string[];
 		description?: string;
 		/** Idempotency key for registration. Defaults to `"sdk-local:" + pathname of publicUrl` (or `"sdk-local:/guap"`). */
 		registrationKey?: string;
-		/** Auto-register (and re-register on a rotated secret) instead of requiring an explicit `register()` call. Defaults to `true`. */
+		/** Auto-register (and re-register on a rotated secret) instead of requiring an explicit `register()` call. Defaults to `true`. Auto-registration itself still requires a resolvable URL — see `publicUrl`. */
 		autoRegister?: boolean;
 	};
 	/** Webhook hooks to run after every verified, projected delivery. Overridable per-call via `handler(hooks)`. */
@@ -363,16 +398,28 @@ async function readValue<T>(
 	return { found: true, value: record.value as T };
 }
 
+/**
+ * Upserts `value` under last-write-wins ordering, and reports whether the
+ * write actually happened. Callers that derive state-transition side effects
+ * (cache invalidation, semantic hooks) from a projection must gate on this
+ * return value — a rejected write means the store's state didn't change, so
+ * there is nothing to invalidate and no transition to report.
+ *
+ * @returns `false` when `existing.sourceTs > sourceTs` (a strictly-older event
+ *   arrived late and is rejected); `true` when the record was written
+ *   (including a tie, which favors the newer arrival).
+ */
 async function lwwPut(
 	store: GuapStore,
 	collection: string,
 	id: string,
 	value: unknown,
 	sourceTs: number,
-): Promise<void> {
+): Promise<boolean> {
 	const existing = await store.get(collection, id);
-	if (existing && existing.sourceTs > sourceTs) return; // strictly-older writes are rejected; ties favor the newer arrival
+	if (existing && existing.sourceTs > sourceTs) return false; // strictly-older writes are rejected; ties favor the newer arrival
 	await store.put(collection, id, { value, sourceTs, writtenAt: Date.now() });
+	return true;
 }
 
 async function invalidatePrefixes(
@@ -422,12 +469,18 @@ function parseCustomerSnapshot(
 
 function sourceTsOf(envelope: GuapDomainEventEnvelope): number {
 	const parsed = Date.parse(envelope.createdAt);
-	return Number.isFinite(parsed) ? parsed : Date.now();
+	// A malformed/unparseable createdAt must lose every LWW comparison, not win
+	// them — falling back to Date.now() would make a garbage timestamp beat
+	// (and overwrite) every legitimate, correctly-timestamped record already in
+	// the store. 0 (the epoch) can only ever lose or tie against a real event.
+	return Number.isFinite(parsed) ? parsed : 0;
 }
 
 /** Outcome of applying one envelope, carrying whatever the projector already read so hook dispatch needs no extra store reads. */
 type ProjectionOutcome = {
 	previousSubscription?: SubscriptionSnapshot | null;
+	/** Whether the `subscription.updated` LWW write was accepted (vs. rejected as stale). Semantic hooks (onSubscribe/onCancel/onPlanChange) must gate on this. */
+	subscriptionAccepted?: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -472,11 +525,14 @@ async function applyProjection(
 			if (!subscription || !customerId) return {};
 			const previousRecord = await store.get("subscriptions", customerId);
 			const previous = (previousRecord?.value as SubscriptionSnapshot | null | undefined) ?? null;
-			await lwwPut(store, "subscriptions", customerId, subscription, sourceTs);
-			if (previous && previous.status !== subscription.status) {
+			const accepted = await lwwPut(store, "subscriptions", customerId, subscription, sourceTs);
+			// A rejected (stale) write must not fire state-derived side effects: the
+			// store's subscription record didn't change, so there's nothing to
+			// invalidate.
+			if (accepted && previous && previous.status !== subscription.status) {
 				await invalidatePrefixes(store, customerId, ["features", "limits"]);
 			}
-			return { previousSubscription: previous };
+			return { previousSubscription: previous, subscriptionAccepted: accepted };
 		}
 		case "purchase.completed":
 		case "purchase.updated": {
@@ -611,7 +667,14 @@ async function dispatchHooks(
 			break;
 	}
 
-	if (envelope.type === "subscription.updated") {
+	// Semantic hooks (onSubscribe/onCancel/onPlanChange) report a state
+	// transition, so they only fire when the projection's LWW write was
+	// actually applied — a superseded/rejected delivery changed nothing in the
+	// store, so there is no transition to report. Contrast with the raw
+	// per-type hook above and onEvent below, which fire on every authentic
+	// delivery regardless of LWW outcome (see the two-tier contract on
+	// GuapWebhookHooks).
+	if (envelope.type === "subscription.updated" && outcome.subscriptionAccepted) {
 		const data = envelope.data as GuapSubscriptionUpdatedData;
 		const subscription = data.subscription;
 		const previous = outcome.previousSubscription ?? null;
@@ -788,10 +851,14 @@ export function createMemoryGuapStore(): GuapStore {
 	return {
 		async get(collection, id) {
 			const record = bucket(collection).get(id);
-			return record ? { ...record } : null;
+			// structuredClone (not a shallow `{ ...record }` spread) so `record.value`
+			// — itself an object/array in every real use — is never shared by
+			// reference with the caller: mutating a returned value must not corrupt
+			// the stored copy, and vice versa.
+			return record ? structuredClone(record) : null;
 		},
 		async put(collection, id, record) {
-			bucket(collection).set(id, { ...record });
+			bucket(collection).set(id, structuredClone(record));
 		},
 		async delete(collection, id) {
 			bucket(collection).delete(id);
@@ -799,7 +866,7 @@ export function createMemoryGuapStore(): GuapStore {
 		async listByPrefix(collection, idPrefix) {
 			const rows: Array<{ id: string; record: GuapStoreRecord }> = [];
 			for (const [id, record] of bucket(collection)) {
-				if (id.startsWith(idPrefix)) rows.push({ id, record: { ...record } });
+				if (id.startsWith(idPrefix)) rows.push({ id, record: structuredClone(record) });
 			}
 			return rows;
 		},
@@ -817,6 +884,16 @@ const REREGISTER_COOLDOWN_MS = 5 * 60_000;
  * explicit `register()` call) unless `webhook.autoRegister` is `false`. New
  * endpoints start `pending_approval` in the Guapocado dashboard — reads keep
  * working correctly via miss-through to the API in the meantime.
+ *
+ * **`webhook.publicUrl` is required for auto-registration.** The registration
+ * URL is never derived from request data by default — a webhook endpoint
+ * registered at a URL an attacker can influence is a real risk, not a
+ * theoretical one. Set `webhook.publicUrl` to the publicly reachable address
+ * of your handler. Without it (and without the narrow, opt-in
+ * `webhook.trustForwardedHost` escape hatch — see {@link GuapLocalOptions}),
+ * auto-registration is skipped and `onError` fires with
+ * `{ scope: "registration" }` on every GET/POST until you configure it or
+ * call `register()` yourself.
  *
  * @param options - `apiKey` is required; `store` defaults to an in-memory
  *   map, `maxAgeMs` to no expiry, and `webhook.events` to `"*"`. See
@@ -912,11 +989,27 @@ export function createGuapLocal(options: GuapLocalOptions): GuapLocal {
 		return meta;
 	}
 
-	function resolvePublicUrl(request: Request): string {
+	/**
+	 * Resolves the URL to register the webhook endpoint at, for
+	 * auto-registration. Never falls back to `request.url`: registering from
+	 * request data by default would let any caller who can reach this handler
+	 * redirect where Guapocado delivers events. Returns `null` (rather than a
+	 * guess) when no explicit `publicUrl` is configured and
+	 * `trustForwardedHost` isn't opted into — callers must treat `null` as
+	 * "skip auto-registration", not substitute a fallback URL of their own.
+	 */
+	function resolvePublicUrl(request: Request): string | null {
 		return (
-			options.webhook?.publicUrl ?? request.headers.get("x-guapocado-public-url") ?? request.url
+			options.webhook?.publicUrl ??
+			(options.webhook?.trustForwardedHost === true
+				? request.headers.get("x-guapocado-public-url")
+				: null) ??
+			null
 		);
 	}
+
+	const NO_PUBLIC_URL_DETAIL =
+		"no publicUrl configured — set webhook.publicUrl to enable auto-registration";
 
 	async function register(): Promise<{ id: string; status: string; url: string }> {
 		const publicUrl = options.webhook?.publicUrl;
@@ -936,10 +1029,15 @@ export function createGuapLocal(options: GuapLocalOptions): GuapLocal {
 	async function handlePost(effectiveHooks: GuapWebhookHooks, request: Request): Promise<Response> {
 		let meta = await getRegistrationMeta();
 		if (!meta?.signingSecret && autoRegisterEnabled) {
-			meta = await performRegister(resolvePublicUrl(request)).catch((error) => {
-				onErr(error, "registration", "lazy register on POST");
-				return meta ?? null;
-			});
+			const publicUrl = resolvePublicUrl(request);
+			if (publicUrl === null) {
+				onErr(new Error(NO_PUBLIC_URL_DETAIL), "registration", NO_PUBLIC_URL_DETAIL);
+			} else {
+				meta = await performRegister(publicUrl).catch((error) => {
+					onErr(error, "registration", "lazy register on POST");
+					return meta ?? null;
+				});
+			}
 		}
 
 		const rawBody = await request.text();
@@ -953,21 +1051,29 @@ export function createGuapLocal(options: GuapLocalOptions): GuapLocal {
 				})
 			: false;
 
+		// Re-registering is attempted on every unverified POST (an unauthenticated
+		// caller can trigger this freely), so it's throttled to once per
+		// REREGISTER_COOLDOWN_MS (5 minutes) — this bounds how often an attacker
+		// hammering this endpoint with bad signatures can force calls into the
+		// registration API, without requiring auth to fix a legitimately rotated secret.
 		if (!verified && autoRegisterEnabled && canReRegister()) {
 			lastReRegisterAt = Date.now();
-			const reregistered = await performRegister(meta?.url ?? resolvePublicUrl(request)).catch(
-				(error) => {
+			const publicUrl = meta?.url ?? resolvePublicUrl(request);
+			if (publicUrl === null) {
+				onErr(new Error(NO_PUBLIC_URL_DETAIL), "registration", NO_PUBLIC_URL_DETAIL);
+			} else {
+				const reregistered = await performRegister(publicUrl).catch((error) => {
 					onErr(error, "registration", "re-register after verify failure");
 					return null;
-				},
-			);
-			if (reregistered) {
-				meta = reregistered;
-				verified = await verifyGuapocadoSignature({
-					payload: rawBody,
-					secret: reregistered.signingSecret,
-					signature: signatureHeader,
 				});
+				if (reregistered) {
+					meta = reregistered;
+					verified = await verifyGuapocadoSignature({
+						payload: rawBody,
+						secret: reregistered.signingSecret,
+						signature: signatureHeader,
+					});
+				}
 			}
 		}
 
@@ -1008,9 +1114,23 @@ export function createGuapLocal(options: GuapLocalOptions): GuapLocal {
 		}
 
 		const now = Date.now();
-		await store
-			.put("events", envelope.id, { value: { type: envelope.type }, sourceTs: now, writtenAt: now })
-			.catch((error) => onErr(error, "store", "dedup marker write"));
+		try {
+			await store.put("events", envelope.id, {
+				value: { type: envelope.type },
+				sourceTs: now,
+				writtenAt: now,
+			});
+		} catch (error) {
+			// A failed dedup marker write must not be swallowed: without it this
+			// delivery is never recorded as seen, so returning 200 here would let a
+			// redelivery silently skip dedup (and, worse, silently skip re-running
+			// hooks that a caller may depend on for at-least-once side effects).
+			// Return 500 so the platform retries — hooks re-fire per the documented
+			// at-least-once contract, and the retry gives the marker write another
+			// chance to succeed.
+			onErr(error, "store", "dedup marker write");
+			return jsonResponse({ error: "dedup marker write failed" }, 500);
+		}
 
 		const known = (GUAPOCADO_DOMAIN_EVENTS as readonly string[]).includes(envelope.type);
 		return jsonResponse(known ? { received: true } : { received: true, ignored: true }, 200);
@@ -1019,16 +1139,27 @@ export function createGuapLocal(options: GuapLocalOptions): GuapLocal {
 	async function handleGet(request: Request): Promise<Response> {
 		let meta = await getRegistrationMeta();
 		if (!meta && autoRegisterEnabled) {
-			meta = await performRegister(resolvePublicUrl(request)).catch((error) => {
-				onErr(error, "registration", "bootstrap register on GET");
-				return null;
-			});
+			const publicUrl = resolvePublicUrl(request);
+			if (publicUrl === null) {
+				onErr(new Error(NO_PUBLIC_URL_DETAIL), "registration", NO_PUBLIC_URL_DETAIL);
+			} else {
+				meta = await performRegister(publicUrl).catch((error) => {
+					onErr(error, "registration", "bootstrap register on GET");
+					return null;
+				});
+			}
 		}
 		return jsonResponse(
 			{
 				ok: true,
 				registered: Boolean(meta),
-				...(meta ? { endpointId: meta.id, status: meta.status, url: meta.url } : {}),
+				...(meta
+					? { endpointId: meta.id, status: meta.status, url: meta.url }
+					: // Never registers from request.url (see resolvePublicUrl), but a GET
+						// hint that echoes the requester's own URL is safe to display — it
+						// only ever comes back to the caller who sent it, and helps them set
+						// webhook.publicUrl correctly.
+						{ suggestedUrl: request.url }),
 			},
 			200,
 		);

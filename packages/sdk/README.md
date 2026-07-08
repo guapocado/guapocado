@@ -250,6 +250,36 @@ status (`{ ok, registered, endpointId?, status?, url? }`) and lazily
 registers the endpoint if needed, so pinging it (or `guap listen`) is enough
 to bootstrap registration.
 
+### `webhook.publicUrl` is required for auto-registration
+
+Auto-registration never derives its URL from request data by default —
+registering a webhook endpoint at a URL an attacker can influence (e.g. by
+forging a `Host` header behind a misconfigured proxy) would let them redirect
+where Guapocado delivers your events. Set `webhook.publicUrl` to the publicly
+reachable address of your handler, as shown above. Without it, auto-registration
+is skipped on every GET/POST and `onError` fires with
+`{ scope: "registration", detail: "no publicUrl configured — set webhook.publicUrl to enable auto-registration" }`;
+reads keep working via API miss-through, but no webhook events are delivered
+until you configure `publicUrl` (or call `register()` explicitly).
+
+The `GET` status response may still echo `request.url` back as a
+`suggestedUrl` hint when unregistered — that's safe (it only returns to the
+caller who sent it) and never used to register.
+
+If you run behind a proxy/load balancer that you control end-to-end and that
+strips or overwrites the `x-guapocado-public-url` header before it reaches
+your handler, you can opt into deriving the URL from that header instead:
+
+```typescript
+const guap = createGuapocadoClientWithLocal({
+  apiKey: process.env.GUAPOCADO_API_KEY!,
+  webhook: { trustForwardedHost: true }, // only if you control every hop up to this handler
+});
+```
+
+`trustForwardedHost` defaults to `false`. Prefer setting `publicUrl` explicitly
+unless you have a specific reason to derive it per-request.
+
 ### The `GuapStore` contract
 
 `createGuapLocal` defaults to `createMemoryGuapStore()` — process-local,
@@ -395,8 +425,11 @@ event, including unknown/future types); raw per-event hooks
 (`onCustomerUpdated`, `onSubscriptionUpdated`, `onPurchaseCompleted`,
 `onPurchaseUpdated`, `onEntitlementsUpdated`, `onInvoiceUpdated`); and semantic
 transition hooks derived from the previously stored record — `onSubscribe`,
-`onCancel`, `onPlanChange`, `onPurchase` — so "did this customer just
-subscribe/cancel/upgrade" needs no diffing in your own code.
+`onCancel`, `onPlanChange` — so "did this customer just
+subscribe/cancel/upgrade" needs no diffing in your own code. `onPurchase` is a
+convenience alias for `onPurchaseCompleted` that surfaces the purchase and its
+grants directly on `ctx` (see the two-tier contract below for how it differs
+from the transition hooks).
 
 ```typescript
 import { createGuapocadoClientWithLocal, type GuapPurchaseHookContext } from "@guapocado/sdk";
@@ -425,6 +458,26 @@ retry re-fires it. **Write hooks to be idempotent** — e.g. dedupe outbound
 emails by `event.id` — since the same delivery can invoke your hook more than
 once. Hooks never re-run on a deduplicated redelivery (the event was already
 fully processed).
+
+#### Two-tier delivery contract
+
+`onEvent` and the raw per-event hooks (`onCustomerUpdated`,
+`onSubscriptionUpdated`, …) are the at-least-once **event log**: they fire on
+every authentic (signature-verified, non-deduplicated) delivery, including one
+that last-write-wins conflict resolution goes on to reject as stale — e.g. a
+delayed `subscription.updated` that arrives after a newer event already moved
+the stored subscription on. `onSubscribe`, `onCancel`, and `onPlanChange` are
+the **semantic** tier: they fire only when that delivery's write was actually
+*applied* to the store. A superseded/rejected delivery changed nothing, so
+there's no real transition to report and these hooks are skipped for it —
+without this, a stale `canceled` event arriving after a newer `active` event
+would incorrectly fire `onCancel` (and skip invalidating cached features/limits)
+even though the customer's active subscription never changed.
+
+Write the raw tier and `onEvent` defensively — they may describe an event the
+store no longer reflects. The semantic tier can be trusted to match current
+state. (`onPurchase`, the `purchase.completed` alias, is not gated this way —
+like the raw tier, it fires on every authentic delivery.)
 
 ## Client types
 
