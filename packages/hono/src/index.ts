@@ -1,4 +1,6 @@
 import {
+	type GuapLocal,
+	type GuapWebhookHooks,
 	type GuapocadoClient,
 	type GuapocadoClientOptions,
 	createGuapocadoClient,
@@ -173,4 +175,42 @@ export function getGuapCustomerId<E extends Env & { Variables: GuapocadoHonoVari
 	c: Context<E>,
 ): string | undefined {
 	return c.get("guapCustomerId");
+}
+
+/**
+ * Adapts a `@guapocado/sdk` local read model's fetch-shaped webhook `handler`
+ * into a Hono route handler, so mounting it is a one-liner:
+ * `app.all("/webhooks/guap", guapLocalHandler(local, hooks))`. Forwards
+ * `hooks` to `local.handler(hooks)` unchanged — omit them to fall back to the
+ * projection-only behavior of `local.handler()`.
+ *
+ * @param local - The `GuapLocal` returned by `createGuapLocal` (from `@guapocado/sdk`).
+ * @param hooks - Optional webhook hooks to run after each verified, projected event.
+ * @returns A Hono route handler you can pass directly to `app.all(path, ...)`.
+ * @example
+ * ```typescript
+ * import { createGuapLocal } from "@guapocado/sdk";
+ * import { guapLocalHandler } from "@guapocado/hono";
+ * import { Hono } from "hono";
+ *
+ * const local = createGuapLocal({
+ *   apiKey: process.env.GUAPOCADO_API_KEY!,
+ *   webhook: { publicUrl: "https://app.example.com/webhooks/guap" },
+ * });
+ *
+ * const app = new Hono();
+ * app.all(
+ *   "/webhooks/guap",
+ *   guapLocalHandler(local, {
+ *     onCancel: async (ctx) => console.log(`${ctx.customerId} canceled`),
+ *   }),
+ * );
+ * ```
+ */
+export function guapLocalHandler(
+	local: GuapLocal,
+	hooks?: GuapWebhookHooks,
+): (c: Context) => Promise<Response> {
+	const requestHandler = local.handler(hooks);
+	return (c: Context) => requestHandler(c.req.raw);
 }
