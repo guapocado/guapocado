@@ -1,6 +1,6 @@
 {
 	"name": "@guapocado/supabase",
-	"version": "0.0.3",
+	"version": "0.0.6",
 	"type": "module",
 	"main": "./dist/index.js",
 	"module": "./dist/index.js",

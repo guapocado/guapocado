@@ -49,6 +49,33 @@ export type {
 	WebhookRegistration,
 	WebhookRegistrationInput,
 } from "./client.js";
+export type {
+	GuapCancelHookContext,
+	GuapCustomerUpdatedData,
+	GuapDomainEventEnvelope,
+	GuapEntitlementsUpdatedData,
+	GuapHookContext,
+	GuapInvoiceUpdatedData,
+	GuapLocal,
+	GuapLocalOptions,
+	GuapPlanChangeHookContext,
+	GuapPurchaseCompletedData,
+	GuapPurchaseGrant,
+	GuapPurchaseHookContext,
+	GuapPurchaseSnapshot,
+	GuapPurchaseUpdatedData,
+	GuapStore,
+	GuapStoreRecord,
+	GuapSubscribeHookContext,
+	GuapSubscriptionUpdatedData,
+	GuapWebhookHooks,
+} from "./local.js";
+export {
+	createGuapLocal,
+	createGuapocadoClientWithLocal,
+	createMemoryGuapStore,
+	verifyGuapocadoSignature,
+} from "./local.js";
 export {
 	GUAPOCADO_DOMAIN_EVENTS,
 	billingConfigSchema,

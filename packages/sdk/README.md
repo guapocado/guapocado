@@ -223,6 +223,262 @@ const guap = createGuapocadoClient({
 });
 ```
 
+## Store-backed local read model (`createGuapLocal`)
+
+The Drizzle-generated adapter above is one way to implement `GuapAdapter`. For
+a batteries-included alternative that needs no code generation and no ORM,
+`createGuapLocal` gives you a concrete `GuapAdapter` plus a webhook receiver in
+one call:
+
+```typescript
+import { createGuapocadoClientWithLocal } from "@guapocado/sdk";
+
+const guap = createGuapocadoClientWithLocal({
+  apiKey: process.env.GUAPOCADO_API_KEY!,
+  webhook: { publicUrl: "https://app.example.com/webhooks/guap" },
+});
+
+// Mount guap.handler() as a fetch handler (Workers, Bun, Deno, Node's
+// http.toWebHandler, or the @guapocado/hono `guapLocalHandler` sugar).
+export default { fetch: (request: Request) => guap.handler()(request) };
+```
+
+`guap.handler()` verifies the `guapocado-signature` header, dedupes on
+delivery id, projects the event into your `store`, and returns a `Response` —
+it never throws into your app. A `GET` to the same URL returns registration
+status (`{ ok, registered, endpointId?, status?, url? }`) and lazily
+registers the endpoint if needed, so pinging it (or `guap listen`) is enough
+to bootstrap registration.
+
+### `webhook.publicUrl` is required for auto-registration
+
+Auto-registration never derives its URL from request data by default —
+registering a webhook endpoint at a URL an attacker can influence (e.g. by
+forging a `Host` header behind a misconfigured proxy) would let them redirect
+where Guapocado delivers your events. Set `webhook.publicUrl` to the publicly
+reachable address of your handler, as shown above. Without it, auto-registration
+is skipped on every GET/POST and `onError` fires with
+`{ scope: "registration", detail: "no publicUrl configured — set webhook.publicUrl to enable auto-registration" }`;
+reads keep working via API miss-through, but no webhook events are delivered
+until you configure `publicUrl` (or call `register()` explicitly).
+
+The `GET` status response may still echo `request.url` back as a
+`suggestedUrl` hint when unregistered — that's safe (it only returns to the
+caller who sent it) and never used to register.
+
+If you run behind a proxy/load balancer that you control end-to-end and that
+strips or overwrites the `x-guapocado-public-url` header before it reaches
+your handler, you can opt into deriving the URL from that header instead:
+
+```typescript
+const guap = createGuapocadoClientWithLocal({
+  apiKey: process.env.GUAPOCADO_API_KEY!,
+  webhook: { trustForwardedHost: true }, // only if you control every hop up to this handler
+});
+```
+
+`trustForwardedHost` defaults to `false`. Prefer setting `publicUrl` explicitly
+unless you have a specific reason to derive it per-request.
+
+### The `GuapStore` contract
+
+`createGuapLocal` defaults to `createMemoryGuapStore()` — process-local,
+non-durable, fine for local dev and single-instance deployments where losing
+the projection on restart (and re-seeding it from miss-through API calls) is
+acceptable. For anything durable, implement `GuapStore`:
+
+```typescript
+type GuapStoreRecord = { value: unknown; sourceTs: number; writtenAt: number };
+
+type GuapStore = {
+  get(collection: string, id: string): Promise<GuapStoreRecord | null>;
+  put(collection: string, id: string, record: GuapStoreRecord): Promise<void>;
+  delete(collection: string, id: string): Promise<void>;
+  listByPrefix(collection: string, idPrefix: string): Promise<Array<{ id: string; record: GuapStoreRecord }>>;
+};
+```
+
+Ids are `encodeURIComponent`-sanitized components joined by `:`
+(`<customerId>:<key>`), so every customer-scoped lookup is a `<customerId>:`
+prefix scan — one `LIKE`/range query on any backend, with no secondary index
+to register. Validate a custom implementation against the shipped contract
+suite:
+
+```typescript
+// my-store.test.ts
+import { testGuapStoreContract } from "@guapocado/sdk/testing";
+import { createMySqliteGuapStore } from "./my-store.js";
+
+testGuapStoreContract("my sqlite store", () => createMySqliteGuapStore(testDb()));
+```
+
+Sketches (documented here, not shipped as a dependency — pick the driver that
+matches your runtime):
+
+```typescript
+// better-sqlite3
+import type Database from "better-sqlite3";
+import type { GuapStore, GuapStoreRecord } from "@guapocado/sdk";
+
+function createBetterSqlite3GuapStore(db: Database.Database): GuapStore {
+  db.exec(`create table if not exists guap_store (
+    collection text not null, id text not null, value text not null,
+    source_ts integer not null, written_at integer not null,
+    primary key (collection, id)
+  )`);
+  return {
+    async get(collection, id) {
+      const row = db
+        .prepare("select value, source_ts, written_at from guap_store where collection = ? and id = ?")
+        .get(collection, id) as { value: string; source_ts: number; written_at: number } | undefined;
+      return row ? { value: JSON.parse(row.value), sourceTs: row.source_ts, writtenAt: row.written_at } : null;
+    },
+    async put(collection, id, record: GuapStoreRecord) {
+      db.prepare(
+        `insert into guap_store (collection, id, value, source_ts, written_at) values (?, ?, ?, ?, ?)
+         on conflict(collection, id) do update set value = excluded.value, source_ts = excluded.source_ts, written_at = excluded.written_at`,
+      ).run(collection, id, JSON.stringify(record.value), record.sourceTs, record.writtenAt);
+    },
+    async delete(collection, id) {
+      db.prepare("delete from guap_store where collection = ? and id = ?").run(collection, id);
+    },
+    async listByPrefix(collection, idPrefix) {
+      const rows = db
+        .prepare("select id, value, source_ts, written_at from guap_store where collection = ? and id like ?")
+        .all(collection, `${idPrefix}%`) as Array<{ id: string; value: string; source_ts: number; written_at: number }>;
+      return rows.map((row) => ({
+        id: row.id,
+        record: { value: JSON.parse(row.value), sourceTs: row.source_ts, writtenAt: row.written_at },
+      }));
+    },
+  };
+}
+```
+
+```typescript
+// Cloudflare D1 — same schema/statements, using the D1Database binding.
+function createD1GuapStore(db: D1Database): GuapStore {
+  return {
+    async get(collection, id) {
+      const row = await db
+        .prepare("select value, source_ts, written_at from guap_store where collection = ?1 and id = ?2")
+        .bind(collection, id)
+        .first<{ value: string; source_ts: number; written_at: number }>();
+      return row ? { value: JSON.parse(row.value), sourceTs: row.source_ts, writtenAt: row.written_at } : null;
+    },
+    async put(collection, id, record) {
+      await db
+        .prepare(
+          `insert into guap_store (collection, id, value, source_ts, written_at) values (?1, ?2, ?3, ?4, ?5)
+           on conflict(collection, id) do update set value = excluded.value, source_ts = excluded.source_ts, written_at = excluded.written_at`,
+        )
+        .bind(collection, id, JSON.stringify(record.value), record.sourceTs, record.writtenAt)
+        .run();
+    },
+    async delete(collection, id) {
+      await db.prepare("delete from guap_store where collection = ?1 and id = ?2").bind(collection, id).run();
+    },
+    async listByPrefix(collection, idPrefix) {
+      const { results } = await db
+        .prepare("select id, value, source_ts, written_at from guap_store where collection = ?1 and id like ?2")
+        .bind(collection, `${idPrefix}%`)
+        .all<{ id: string; value: string; source_ts: number; written_at: number }>();
+      return results.map((row) => ({
+        id: row.id,
+        record: { value: JSON.parse(row.value), sourceTs: row.source_ts, writtenAt: row.written_at },
+      }));
+    },
+  };
+}
+```
+
+### Staleness (`maxAgeMs`)
+
+Without `maxAgeMs`, a local record is served forever once written (correctness
+comes from webhook-driven invalidation, not expiry). Once webhooks are
+flowing, entitlement/limit/subscription reads are safe uncached; `usage`
+balances change more often than they're invalidated (no `usage.updated`
+event ships yet — see below), so give `usage` a short `maxAgeMs` (e.g. `60_000`)
+until it does:
+
+```typescript
+const guap = createGuapocadoClientWithLocal({
+  apiKey: process.env.GUAPOCADO_API_KEY!,
+  maxAgeMs: 60_000,
+  webhook: { publicUrl: "https://app.example.com/webhooks/guap" },
+});
+```
+
+### Approval gate
+
+New webhook endpoints register `pending_approval` / `enabled: 0` until
+approved in the Guapocado dashboard — no deliveries happen until then. This is
+safe: reads keep working correctly via API miss-through in the meantime, and
+`GET` on the handler URL surfaces the current `status` so you can confirm once
+it's approved.
+
+### Webhook hooks
+
+Pass `hooks` to run your own code after an event is verified and projected —
+no polling required. Three tiers, all optional: a catch-all `onEvent` (every
+event, including unknown/future types); raw per-event hooks
+(`onCustomerUpdated`, `onSubscriptionUpdated`, `onPurchaseCompleted`,
+`onPurchaseUpdated`, `onEntitlementsUpdated`, `onInvoiceUpdated`); and semantic
+transition hooks derived from the previously stored record — `onSubscribe`,
+`onCancel`, `onPlanChange` — so "did this customer just
+subscribe/cancel/upgrade" needs no diffing in your own code. `onPurchase` is a
+convenience alias for `onPurchaseCompleted` that surfaces the purchase and its
+grants directly on `ctx` (see the two-tier contract below for how it differs
+from the transition hooks).
+
+```typescript
+import { createGuapocadoClientWithLocal, type GuapPurchaseHookContext } from "@guapocado/sdk";
+
+async function sendReceipt(ctx: GuapPurchaseHookContext) {
+  await sendEmail(ctx.customerId, `Thanks for your purchase of ${ctx.purchase.productKey}!`);
+}
+
+const guap = createGuapocadoClientWithLocal({
+  apiKey: process.env.GUAPOCADO_API_KEY!,
+  webhook: { publicUrl: "https://app.example.com/webhooks/guap" },
+});
+
+const webhookHandler = guap.handler({
+  onPurchase: sendReceipt, // a pre-packaged function reference...
+  onCancel: async (ctx) => {
+    // ...or an inline lambda — both fully type-check with zero annotations.
+    await notifyChurn(ctx.customerId, ctx.previous);
+  },
+});
+```
+
+Hooks run **after** projection but **before** the delivery is marked
+delivered, so a throwing hook causes a `500` and the platform's at-least-once
+retry re-fires it. **Write hooks to be idempotent** — e.g. dedupe outbound
+emails by `event.id` — since the same delivery can invoke your hook more than
+once. Hooks never re-run on a deduplicated redelivery (the event was already
+fully processed).
+
+#### Two-tier delivery contract
+
+`onEvent` and the raw per-event hooks (`onCustomerUpdated`,
+`onSubscriptionUpdated`, …) are the at-least-once **event log**: they fire on
+every authentic (signature-verified, non-deduplicated) delivery, including one
+that last-write-wins conflict resolution goes on to reject as stale — e.g. a
+delayed `subscription.updated` that arrives after a newer event already moved
+the stored subscription on. `onSubscribe`, `onCancel`, and `onPlanChange` are
+the **semantic** tier: they fire only when that delivery's write was actually
+*applied* to the store. A superseded/rejected delivery changed nothing, so
+there's no real transition to report and these hooks are skipped for it —
+without this, a stale `canceled` event arriving after a newer `active` event
+would incorrectly fire `onCancel` (and skip invalidating cached features/limits)
+even though the customer's active subscription never changed.
+
+Write the raw tier and `onEvent` defensively — they may describe an event the
+store no longer reflects. The semantic tier can be trusted to match current
+state. (`onPurchase`, the `purchase.completed` alias, is not gated this way —
+like the raw tier, it fires on every authentic delivery.)
+
 ## Client types
 
 ### `createGuapocadoClient(options)`

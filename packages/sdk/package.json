@@ -1,6 +1,6 @@
 {
 	"name": "@guapocado/sdk",
-	"version": "0.0.3",
+	"version": "0.0.6",
 	"type": "module",
 	"main": "./dist/index.js",
 	"module": "./dist/index.js",
@@ -9,6 +9,10 @@
 		".": {
 			"import": "./dist/index.js",
 			"types": "./dist/index.d.ts"
+		},
+		"./testing": {
+			"import": "./dist/testing.js",
+			"types": "./dist/testing.d.ts"
 		}
 	},
 	"files": ["dist"],
@@ -18,12 +22,20 @@
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
-		"build": "tsup",
+		"build": "tsup src/index.ts src/testing.ts --format esm --dts",
 		"test": "vitest run",
 		"prepublishOnly": "pnpm build"
 	},
 	"dependencies": {
 		"@guapocado/shared": "workspace:*"
+	},
+	"peerDependencies": {
+		"vitest": "^4.0.0"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
 	},
 	"devDependencies": {
 		"tsup": "^8.0.0",

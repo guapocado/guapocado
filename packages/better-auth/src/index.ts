@@ -501,6 +501,11 @@ async function findStoredWebhookEndpoint(
 	return toWebhookRegistrationState(existingByUrl);
 }
 
+// NOTE: parseWebhookSignature/hexToBytes/verifyWebhookSignature below duplicate the HMAC
+// verification `@guapocado/sdk`'s local read model now exports as `verifyGuapocadoSignature`
+// (packages/sdk/src/local.ts, extracted from this exact code). A future change should have
+// this plugin import and delegate to that helper instead of maintaining its own copy — left
+// as-is for now since this shipped release makes no other better-auth changes.
 function parseWebhookSignature(signature: string): { timestamp: number; v1: string } | null {
 	const parts = Object.fromEntries(
 		signature.split(",").map((part) => {

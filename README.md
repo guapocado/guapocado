@@ -10,7 +10,7 @@ this repository.
 
 | Package | Description |
 | --- | --- |
-| [`@guapocado/sdk`](./packages/sdk) | Server SDK — entitlements, usage, checkout, contracts, audit. |
+| [`@guapocado/sdk`](./packages/sdk) | Server SDK — entitlements, usage, checkout, contracts, audit, plus a store-backed local read model (`createGuapLocal`) with webhook hooks. |
 | [`@guapocado/shared`](./packages/shared) | Canonical billing schema + config tooling. |
 | [`@guapocado/react`](./packages/react) | React hooks + UI primitives. |
 | [`@guapocado/better-auth`](./packages/better-auth) | Better Auth plugin (server + client). |
