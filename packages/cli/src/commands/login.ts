@@ -2,8 +2,10 @@ import { spawn } from "node:child_process";
 import { defineCommand } from "citty";
 import consola from "consola";
 import {
-	type TargetMode,
+	type Environment,
 	ensureLocalCredentialsDir,
+	migrateLegacyEnvironments,
+	normalizeEnvironmentName,
 	readStoredConfig,
 	upsertWorkspaceKey,
 	writeStoredConfig,
@@ -42,13 +44,16 @@ export default defineCommand({
 
 		if (args.key) {
 			// Manual key: the key prefix implies the environment.
-			const envTarget: TargetMode = args.key.startsWith("sk_guap_live_") ? "production" : "sandbox";
+			const envTarget: Environment = args.key.startsWith("sk_guap_live_") ? "live" : "test";
 			const path = ensureLocalCredentialsDir();
 			const existing = readStoredConfig();
 			writeStoredConfig({
 				...existing,
 				defaultEnvironment: envTarget,
-				environments: { ...existing.environments, [envTarget]: { apiKey: args.key } },
+				environments: {
+					...migrateLegacyEnvironments(existing.environments),
+					[envTarget]: { apiKey: args.key },
+				},
 			});
 			consola.success(`Credentials saved to ${path}`);
 			hintGitignore();
@@ -94,20 +99,25 @@ export default defineCommand({
 			const token = (await tokenRes.json()) as {
 				workspaceId?: string;
 				workspaceName?: string;
-				keys?: Partial<Record<TargetMode, string>>;
+				// The server may still use the legacy "sandbox"/"production" names.
+				keys?: Partial<Record<string, string>>;
 				// legacy single-key shape
 				apiKey?: string;
-				target?: TargetMode;
+				target?: string;
 			};
 
 			const workspaceId = token.workspaceId ?? "default";
-			const entries: Array<[TargetMode, string]> = (
-				token.keys
-					? (Object.entries(token.keys) as Array<[TargetMode, string]>)
-					: token.apiKey
-						? [[token.target ?? "sandbox", token.apiKey] as [TargetMode, string]]
-						: []
-			).filter(([, apiKey]) => Boolean(apiKey));
+			const rawEntries: Array<[Environment | null, string | undefined]> = token.keys
+				? Object.entries(token.keys).map(([name, apiKey]) => [
+						normalizeEnvironmentName(name),
+						apiKey,
+					])
+				: token.apiKey
+					? [[normalizeEnvironmentName(token.target) ?? "test", token.apiKey]]
+					: [];
+			const entries = rawEntries.filter(
+				(entry): entry is [Environment, string] => Boolean(entry[0]) && Boolean(entry[1]),
+			);
 
 			let config = readStoredConfig();
 			for (const [envTarget, apiKey] of entries) {

@@ -1,25 +1,33 @@
-import { type BillingConfig, diffConfigs } from "@guapocado/shared";
+import { type BillingConfig, diffConfigs, toCanonical } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
-import { loadBillingConfig, loadCanonicalBillingConfig } from "../billing-config.js";
-import { type Environment, loadConfig, loadTargetConfig } from "../config.js";
+import { loadBillingConfig } from "../billing-config.js";
+import { loadTargetConfig, resolveEnvironment } from "../config.js";
 import { printDiff } from "../format-diff.js";
 import { hintGitignore } from "../hints.js";
 
 export default defineCommand({
 	meta: { description: "Push billing config to Guapocado" },
 	args: {
-		env: {
-			type: "string",
-			description: "Legacy environment name",
+		test: {
+			type: "boolean",
+			description: "Push to the test environment using a sk_guap_test_ key",
+		},
+		live: {
+			type: "boolean",
+			description: "Push to live using a sk_guap_live_ key",
 		},
 		sandbox: {
 			type: "boolean",
-			description: "Push to the sandbox environment using a sk_guap_test_ key",
+			description: "Deprecated alias for --test.",
 		},
 		production: {
 			type: "boolean",
-			description: "Push to production using a sk_guap_live_ key",
+			description: "Deprecated alias for --live.",
+		},
+		env: {
+			type: "string",
+			description: "Deprecated. Use --test or --live.",
 		},
 		accept: {
 			type: "boolean",
@@ -33,28 +41,26 @@ export default defineCommand({
 		},
 	},
 	async run({ args }) {
-		if (args.sandbox && args.production) {
-			throw new Error("Choose either --sandbox or --production, not both.");
-		}
-		const config = args.sandbox
-			? loadTargetConfig("sandbox")
-			: args.production
-				? loadTargetConfig("production")
-				: loadConfig(args.env as Environment | undefined);
+		const environment = await resolveEnvironment({
+			test: args.test as boolean | undefined,
+			live: args.live as boolean | undefined,
+			sandbox: args.sandbox as boolean | undefined,
+			production: args.production as boolean | undefined,
+			env: args.env as string | undefined,
+		});
+		const config = loadTargetConfig(environment);
 		hintGitignore();
 
 		const configPath = (args.config as string | undefined) ?? process.cwd();
-		const [local, canonical] = await Promise.all([
-			loadBillingConfig(configPath),
-			loadCanonicalBillingConfig(configPath),
-		]);
+		const local = await loadBillingConfig(configPath);
 
-		if (!local || !canonical) {
+		if (!local) {
 			consola.error(
 				"No billing config found. Expected one of: billing.config.ts, billing.config.json, guapocado.billing.json, guapocado.billing.yaml",
 			);
 			return;
 		}
+		const canonical = toCanonical(local);
 
 		// Pull remote config for diff. Failure is non-fatal — the environment may not be set up yet.
 		let remote: BillingConfig | null = null;

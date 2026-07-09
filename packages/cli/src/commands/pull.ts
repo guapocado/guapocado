@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { BILLING_SCHEMA_VERSION, type BillingConfig, toCanonical } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
-import { type Environment, loadConfig } from "../config.js";
+import { loadTargetConfig, resolveEnvironment } from "../config.js";
 import { hintGitignore } from "../hints.js";
 
 function toTypeScript(config: BillingConfig): string {
@@ -47,9 +47,25 @@ function toTypeScript(config: BillingConfig): string {
 export default defineCommand({
 	meta: { description: "Pull billing config from Guapocado" },
 	args: {
+		test: {
+			type: "boolean",
+			description: "Pull from the test environment using a sk_guap_test_ key",
+		},
+		live: {
+			type: "boolean",
+			description: "Pull from live using a sk_guap_live_ key",
+		},
+		sandbox: {
+			type: "boolean",
+			description: "Deprecated alias for --test.",
+		},
+		production: {
+			type: "boolean",
+			description: "Deprecated alias for --live.",
+		},
 		env: {
 			type: "string",
-			description: "Environment (development, staging, production)",
+			description: "Deprecated. Use --test or --live.",
 		},
 		format: {
 			type: "string",
@@ -58,7 +74,14 @@ export default defineCommand({
 		},
 	},
 	async run({ args }) {
-		const config = loadConfig(args.env as Environment | undefined);
+		const environment = await resolveEnvironment({
+			test: args.test as boolean | undefined,
+			live: args.live as boolean | undefined,
+			sandbox: args.sandbox as boolean | undefined,
+			production: args.production as boolean | undefined,
+			env: args.env as string | undefined,
+		});
+		const config = loadTargetConfig(environment);
 		hintGitignore();
 		consola.info(`Pulling from ${config.environment}...`);
 		const res = await fetch(`${config.baseUrl}/v1/sync/pull`, {

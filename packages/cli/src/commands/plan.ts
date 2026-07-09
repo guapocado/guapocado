@@ -2,23 +2,31 @@ import { type BillingConfig, diffConfigs } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
 import { loadBillingConfig } from "../billing-config.js";
-import { type Environment, loadConfig, loadTargetConfig } from "../config.js";
+import { loadTargetConfig, resolveEnvironment } from "../config.js";
 import { printDiff } from "../format-diff.js";
 
 export default defineCommand({
 	meta: { description: "Preview what changes a push would make" },
 	args: {
-		env: {
-			type: "string",
-			description: "Environment (development, staging, production)",
+		test: {
+			type: "boolean",
+			description: "Plan against the test environment using a sk_guap_test_ key",
+		},
+		live: {
+			type: "boolean",
+			description: "Plan against live using a sk_guap_live_ key",
 		},
 		sandbox: {
 			type: "boolean",
-			description: "Plan against the sandbox environment using a sk_guap_test_ key",
+			description: "Deprecated alias for --test.",
 		},
 		production: {
 			type: "boolean",
-			description: "Plan against production using a sk_guap_live_ key",
+			description: "Deprecated alias for --live.",
+		},
+		env: {
+			type: "string",
+			description: "Deprecated. Use --test or --live.",
 		},
 		config: {
 			type: "string",
@@ -27,14 +35,14 @@ export default defineCommand({
 		},
 	},
 	async run({ args }) {
-		if (args.sandbox && args.production) {
-			throw new Error("Choose either --sandbox or --production, not both.");
-		}
-		const config = args.sandbox
-			? loadTargetConfig("sandbox")
-			: args.production
-				? loadTargetConfig("production")
-				: loadConfig(args.env as Environment | undefined);
+		const environment = await resolveEnvironment({
+			test: args.test as boolean | undefined,
+			live: args.live as boolean | undefined,
+			sandbox: args.sandbox as boolean | undefined,
+			production: args.production as boolean | undefined,
+			env: args.env as string | undefined,
+		});
+		const config = loadTargetConfig(environment);
 
 		const local = await loadBillingConfig((args.config as string | undefined) ?? process.cwd());
 		if (!local) {

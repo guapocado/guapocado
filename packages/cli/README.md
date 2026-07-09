@@ -12,21 +12,21 @@ npm install -g @guapocado/cli
 
 ```bash
 guap login
-guap login --sandbox
-guap login --production
 ```
 
-The CLI starts a browser/device-code flow and stores the approved target credentials in
-`.guapocado/credentials.json` under the directory where you run `guap login`.
+The CLI starts a browser/device-code flow and stores the approved workspace's test and live
+credentials in `.guapocado/credentials.json` under the directory where you run `guap login`.
 
 > `.guapocado/` holds your API keys — keep it out of version control. `guap login`, `push`,
 > and `pull` warn when it isn't gitignored. Run `guap whoami` to see which workspace and keys
 > are currently active.
 
-For CI escape hatches, an existing server key can still be saved directly:
+For CI escape hatches, an existing server key can still be saved directly — the key's
+`sk_guap_test_`/`sk_guap_live_` prefix determines which environment it's saved under:
 
 ```bash
-guap login --sandbox --key sk_guap_test_...
+guap login --key sk_guap_test_...
+guap login --key sk_guap_live_...
 ```
 
 ## Commands
@@ -54,9 +54,13 @@ Push your local billing config to the Guapocado platform and sync to Stripe.
 
 ```bash
 guap push
-guap push --sandbox
-guap push --production
+guap push --test
+guap push --live
 ```
+
+With no `--test`/`--live` flag: if exactly one environment has a stored key, that one is used;
+otherwise `guap push` prompts you to choose (or, in a non-interactive shell, errors instead of
+silently targeting a keyless environment).
 
 ### `guap pull`
 
@@ -64,7 +68,7 @@ Pull the current billing config from the platform and write to `billing.config.j
 
 ```bash
 guap pull
-guap pull --env production
+guap pull --live
 ```
 
 ### `guap diff`
@@ -204,14 +208,19 @@ guap listen
 
 ## Environments
 
-Use sandbox and production targets for config pushes:
+Use `--test` and `--live` to target a config push, pull, or plan:
 
 ```bash
-guap login --sandbox
-guap login --production
-guap push --sandbox
-guap push --production
+guap login --key sk_guap_test_...
+guap login --key sk_guap_live_...
+guap push --test
+guap push --live
 ```
+
+`--sandbox`/`--production` and a bare `--env <name>` are still accepted as deprecated aliases
+for `--test`/`--live` (`sandbox` → `test`, `production` → `live`) so existing scripts keep
+working, but new usage should prefer `--test`/`--live` — they match the platform's key
+prefixes (`sk_guap_test_`/`sk_guap_live_`) and the `x-guapocado-env-mode` header.
 
 Credentials are stored in project-local `.guapocado/credentials.json`; treat
 that file as CLI-owned.

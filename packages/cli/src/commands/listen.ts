@@ -309,7 +309,7 @@ function announceRegistration(
 			`Local receiver registered ${registration.url}, but the active relay is ${session.publicUrl}. Re-register the local receiver from this project if the dashboard shows a different endpoint.`,
 		);
 	}
-	consola.success(`Listening for Guapocado sandbox webhooks at ${session.publicUrl}`);
+	consola.success(`Listening for Guapocado test webhooks at ${session.publicUrl}`);
 	consola.success("Guapocado dev relay connected");
 	consola.info(`Relay session expires at ${session.expiresAt}`);
 	if (registration.id) {
@@ -330,13 +330,21 @@ export default defineCommand({
 			description: "Local webhook URL to forward to",
 			default: DEFAULT_LOCAL_URL,
 		},
+		test: {
+			type: "boolean",
+			description: "Listen for test webhooks. (default; live is not supported)",
+		},
+		live: {
+			type: "boolean",
+			description: "Not supported. Dev relay never forwards live webhooks.",
+		},
 		sandbox: {
 			type: "boolean",
-			description: "Listen for sandbox webhooks.",
+			description: "Deprecated alias for --test.",
 		},
 		production: {
 			type: "boolean",
-			description: "Not supported. Dev relay never forwards production webhooks.",
+			description: "Deprecated alias for --live. Not supported.",
 		},
 		dev: {
 			type: "boolean",
@@ -357,11 +365,11 @@ export default defineCommand({
 		},
 	},
 	async run({ args }) {
-		if (args.production) {
-			throw new Error("guap listen is dev-only and only supports sandbox webhooks.");
+		if (args.production || args.live) {
+			throw new Error("guap listen is dev-only and only supports test webhooks.");
 		}
-		if (args.sandbox === false) {
-			consola.info("Defaulting to sandbox mode. Production relay is intentionally unsupported.");
+		if (args.sandbox) {
+			consola.warn("--sandbox is deprecated — use --test instead.");
 		}
 
 		const localUrl = String(args.to);
@@ -369,7 +377,7 @@ export default defineCommand({
 
 		const projectConfig = await loadProjectConfig(args.config as string | undefined);
 		if (args.dev && !(await shouldStartDevRelay(projectConfig))) return;
-		const config = loadTargetConfig("sandbox");
+		const config = loadTargetConfig("test");
 		let registration = await bootstrapLocalReceiver(localUrl, config.apiKey);
 		let session = registration.relay ?? null;
 		if (!session) {
