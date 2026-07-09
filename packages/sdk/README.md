@@ -239,16 +239,28 @@ const guap = createGuapocadoClientWithLocal({
 });
 
 // Mount guap.handler() as a fetch handler (Workers, Bun, Deno, Node's
-// http.toWebHandler, or the @guapocado/hono `guapLocalHandler` sugar).
+// http.toWebHandler(), or any framework that takes a (request) => Promise<Response>).
 export default { fetch: (request: Request) => guap.handler()(request) };
 ```
+
+On Hono, use `createGuapLocal` directly (rather than
+`createGuapocadoClientWithLocal`) with `@guapocado/hono`'s `guapLocalHandler`
+sugar — see [`@guapocado/hono`](../hono#mounting-with-guaplocalhandler).
+
+The `createGuapLocal` adapter serves `has`, `limit`, `usage.balance`,
+`subscription.current`, `plans.list`, and `purchases.list` locally once
+projected. `guap.context(...)` is not locally served — it always misses
+through to the API (and `trueUp`s the individual collections above from the
+result), so call the narrower per-collection reads above on your hot path if
+you want to stay local-first.
 
 `guap.handler()` verifies the `guapocado-signature` header, dedupes on
 delivery id, projects the event into your `store`, and returns a `Response` —
 it never throws into your app. A `GET` to the same URL returns registration
-status (`{ ok, registered, endpointId?, status?, url? }`) and lazily
-registers the endpoint if needed, so pinging it (or `guap listen`) is enough
-to bootstrap registration.
+status (`{ ok, registered, endpointId?, status?, url? }`) and lazily registers
+the endpoint if needed (once `webhook.publicUrl` is configured), so a single
+GET request against the deployed URL is enough to bootstrap registration —
+no separate `register()` call required.
 
 ### `webhook.publicUrl` is required for auto-registration
 
@@ -311,6 +323,11 @@ import { createMySqliteGuapStore } from "./my-store.js";
 
 testGuapStoreContract("my sqlite store", () => createMySqliteGuapStore(testDb()));
 ```
+
+`@guapocado/sdk/testing` is a **test-only** subpath: it imports `vitest` (an
+optional peer dependency — add it as a dev dependency to use `testGuapStoreContract`)
+and registers `describe`/`it` blocks as a side effect, so only import it from
+`*.test.ts` files, never from application/production code.
 
 Sketches (documented here, not shipped as a dependency — pick the driver that
 matches your runtime):
