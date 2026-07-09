@@ -3,6 +3,31 @@
 All notable changes to the `@guapocado/*` packages. Pre-1.0 — while on `0.0.x`, **any
 release may contain breaking changes**. Pin exact versions.
 
+## 0.0.7
+
+All seven packages release in lockstep this version.
+
+### Changed
+
+- **`@guapocado/cli`** — finished the test/live vocabulary rename that a prior release started.
+  `--sandbox`/`--production` are now deprecated aliases for `--test`/`--live` (still work, print
+  a one-line deprecation notice, and normalize to the canonical flag); a bare `--env sandbox` /
+  `--env production` is likewise aliased. Stored credentials in `.guapocado/credentials.json`
+  are read with the same aliasing (legacy `sandbox`/`production` workspace environment keys are
+  still honored) and are migrated to the canonical `test`/`live` names the next time you
+  `guap login` — existing logins keep working without a re-login.
+- **`@guapocado/cli`** — `push`, `pull`, and `plan` no longer default to a keyless
+  `"development"` environment when no `--test`/`--live` flag is given. With no flag: if exactly
+  one environment has a stored key, that one is used; otherwise, in an interactive terminal, you
+  are prompted to choose among the environments that actually have stored keys; otherwise the
+  command errors ("Specify --test or --live (no environment selected)") instead of silently
+  targeting an environment with no key (which previously surfaced as an opaque 401). `guap
+  listen` now only exposes `--test`/`--live` (aliasing `--sandbox`/`--production`) and continues
+  to only support the test/sandbox dev relay.
+- **`@guapocado/cli`** — `guap push` no longer logs "Detected billing.config.ts — importing via
+  tsx" twice (it loaded and parsed the config file independently for the diff and the canonical
+  payload; it now loads it once and derives the canonical payload from that).
+
 ## 0.0.6
 
 All seven packages release in lockstep this version.

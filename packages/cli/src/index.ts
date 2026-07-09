@@ -3,7 +3,7 @@ import { defineCommand, runMain } from "citty";
 const main = defineCommand({
 	meta: {
 		name: "guap",
-		version: "0.0.2",
+		version: "0.0.7",
 		description: "Guapocado CLI — typed monetisation infrastructure",
 	},
 	subCommands: {
