@@ -1,6 +1,7 @@
 import { type BillingConfig, diffConfigs } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
+import { guapocadoApiHeaders } from "../api-headers.js";
 import { loadBillingConfig } from "../billing-config.js";
 import { loadTargetConfig, resolveEnvironment } from "../config.js";
 import { printDiff } from "../format-diff.js";
@@ -55,7 +56,7 @@ export default defineCommand({
 		let res: Response;
 		try {
 			res = await fetch(`${config.baseUrl}/v1/sync/pull`, {
-				headers: { "x-guapocado-key": config.apiKey },
+				headers: guapocadoApiHeaders(config.apiKey),
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);

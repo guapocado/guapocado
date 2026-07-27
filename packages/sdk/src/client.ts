@@ -1,9 +1,42 @@
+import packageJson from "../package.json";
+
+/** Semantic version of the installed `@guapocado/sdk` package. */
+export const GUAPOCADO_SDK_VERSION = "0.0.9";
+
+if (packageJson.version !== GUAPOCADO_SDK_VERSION) {
+	throw new Error(
+		`@guapocado/sdk version metadata is out of sync: package.json is ${packageJson.version}, client contract is ${GUAPOCADO_SDK_VERSION}`,
+	);
+}
+
+/**
+ * API contract used by default by this SDK release. Guapocado API contracts
+ * use the same semantic version as the SDK release that introduced them.
+ */
+export const GUAPOCADO_API_VERSION = GUAPOCADO_SDK_VERSION;
+
+/**
+ * API contracts whose response shapes this SDK release understands.
+ *
+ * Add an older version here only when this SDK has retained and tested the
+ * corresponding types and behavior.
+ */
+export const GUAPOCADO_COMPATIBLE_VERSIONS = [GUAPOCADO_SDK_VERSION] as const;
+
+/** API contract accepted by this installed SDK. */
+export type GuapocadoVersion = (typeof GUAPOCADO_COMPATIBLE_VERSIONS)[number];
+
 /** Options for constructing a Guapocado SDK client. */
 export type BillingClientOptions = {
 	apiKey: string;
 	customerId?: string;
 	/** Override the Guapocado API base URL. Defaults to https://api.guapocado.dev. */
 	apiUrl?: string;
+	/**
+	 * API contract to request. Defaults to the installed SDK version and must
+	 * be one of {@link GUAPOCADO_COMPATIBLE_VERSIONS}.
+	 */
+	version?: GuapocadoVersion;
 	/** Preferred local read-model adapter. Reads check this adapter before API fallback. */
 	adapter?: GuapAdapter;
 	/** @deprecated Use adapter. */
@@ -602,12 +635,25 @@ function assertNonNegativeNumber(value: number, name: string): void {
 	}
 }
 
-function makeRequest(baseUrl: string, apiKey: string) {
+function resolveVersion(version: string | undefined): GuapocadoVersion {
+	const requested = version ?? GUAPOCADO_SDK_VERSION;
+	if (!(GUAPOCADO_COMPATIBLE_VERSIONS as readonly string[]).includes(requested)) {
+		throw new GuapocadoValidationError(
+			`version ${requested} is not compatible with @guapocado/sdk ${GUAPOCADO_SDK_VERSION}; supported versions: ${GUAPOCADO_COMPATIBLE_VERSIONS.join(", ")}`,
+		);
+	}
+	return requested as GuapocadoVersion;
+}
+
+function makeRequest(baseUrl: string, apiKey: string, version: GuapocadoVersion) {
 	return async function request<T>(path: string, init?: RequestInit): Promise<T> {
 		const res = await fetch(`${baseUrl}${path}`, {
 			...init,
 			headers: {
 				"x-guapocado-key": apiKey,
+				"Guapocado-Version": version,
+				"Guapocado-SDK-Version": GUAPOCADO_SDK_VERSION,
+				"Guapocado-SDK-Language": "typescript",
 				"content-type": "application/json",
 				...init?.headers,
 			},
@@ -693,7 +739,11 @@ async function trueUpReadModel(
  */
 export function createGuapocadoClient(options: GuapocadoClientOptions): GuapocadoClient {
 	if (!options.apiKey) throw new GuapocadoValidationError("apiKey is required");
-	const request = makeRequest(options.apiUrl ?? GUAPOCADO_API_BASE_URL, options.apiKey);
+	const request = makeRequest(
+		options.apiUrl ?? GUAPOCADO_API_BASE_URL,
+		options.apiKey,
+		resolveVersion(options.version),
+	);
 	const readModel = options.adapter ?? options.readModel;
 
 	return {
@@ -982,7 +1032,11 @@ export function createReadOnlyGuapocadoClient(
 	options: GuapocadoClientOptions,
 ): ReadOnlyGuapocadoClient {
 	if (!options.apiKey) throw new GuapocadoValidationError("apiKey is required");
-	const request = makeRequest(options.apiUrl ?? GUAPOCADO_API_BASE_URL, options.apiKey);
+	const request = makeRequest(
+		options.apiUrl ?? GUAPOCADO_API_BASE_URL,
+		options.apiKey,
+		resolveVersion(options.version),
+	);
 	const readModel = options.adapter ?? options.readModel;
 
 	return {

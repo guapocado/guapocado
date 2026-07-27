@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { BILLING_SCHEMA_VERSION, type BillingConfig, toCanonical } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
+import { guapocadoApiHeaders } from "../api-headers.js";
 import { loadTargetConfig, resolveEnvironment } from "../config.js";
 import { hintGitignore } from "../hints.js";
 
@@ -85,7 +86,7 @@ export default defineCommand({
 		hintGitignore();
 		consola.info(`Pulling from ${config.environment}...`);
 		const res = await fetch(`${config.baseUrl}/v1/sync/pull`, {
-			headers: { "x-guapocado-key": config.apiKey },
+			headers: guapocadoApiHeaders(config.apiKey),
 		});
 		if (!res.ok) {
 			consola.error(`Failed to pull: ${res.status} ${res.statusText}`);

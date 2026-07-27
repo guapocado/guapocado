@@ -65,6 +65,49 @@ await guap.limit("seats", { customerId: "team_123" });
 organization ID, team ID, workspace ID, project ID, account ID, or a dedicated
 Guapocado customer ID if you store one.
 
+## API and SDK versions
+
+SDK packages and API behavior use the same semantic version. Every SDK release
+defaults to the matching API contract it was built and typed against.
+The client sends these headers automatically on every managed API request:
+
+```text
+Guapocado-Version: 0.0.9
+Guapocado-SDK-Version: 0.0.9
+Guapocado-SDK-Language: typescript
+```
+
+That means installing a newer SDK is the explicit upgrade point; an existing
+deployment keeps requesting its original API contract. Raw HTTP clients that
+omit `Guapocado-Version` use the environment's pinned default.
+
+Existing API contracts are immutable. A new response shape or validation rule
+that could break an integration ships under a new semantic version while the
+old contract remains available. Documented SDK behavior is also kept compatible
+across `0.0.x` releases from `0.0.9` onward; an intentional breaking SDK change
+will move the package to `1.0.0` and use major versions after that.
+
+You can inspect the versions compiled into the package:
+
+```typescript
+import {
+  GUAPOCADO_API_VERSION,
+  GUAPOCADO_COMPATIBLE_VERSIONS,
+  GUAPOCADO_SDK_VERSION,
+} from "@guapocado/sdk";
+```
+
+The optional `version` attribute defaults to `GUAPOCADO_SDK_VERSION`. It is
+typed and runtime-checked against `GUAPOCADO_COMPATIBLE_VERSIONS`, so an
+installed SDK cannot request a contract whose response shapes it does not know:
+
+```typescript
+const guap = createGuapocadoClient({
+  apiKey: process.env.GUAPOCADO_API_KEY!,
+  version: "0.0.9",
+});
+```
+
 ## Deployment modes
 
 Guapocado supports two server-side deployment modes.
@@ -506,6 +549,9 @@ Options:
 
 - `apiKey`: required Guapocado API key.
 - `customerId`: optional default customer scope.
+- `apiUrl`: optional API base URL override.
+- `version`: optional compatible API contract. Defaults to the installed SDK
+  version and rejects unsupported values.
 - `adapter`: optional `GuapAdapter` for local read-model mode.
 
 ### `createReadOnlyGuapocadoClient(options)`

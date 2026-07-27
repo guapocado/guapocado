@@ -101,9 +101,13 @@ export {
 	createGuapocadoClient,
 	createReadOnlyGuapocadoClient,
 	createReadOnlyClient,
+	GUAPOCADO_API_VERSION,
+	GUAPOCADO_COMPATIBLE_VERSIONS,
+	GUAPOCADO_SDK_VERSION,
 	GuapocadoAuthError,
 	GuapocadoError,
 	GuapocadoRateLimitError,
 	GuapocadoValidationError,
 } from "./client.js";
+export type { GuapocadoVersion } from "./client.js";
 export { createBillingTrpcRouter, createGuapocadoTrpcRouter } from "./trpc.js";
