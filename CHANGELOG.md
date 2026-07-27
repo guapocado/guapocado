@@ -3,6 +3,24 @@
 All notable changes to the `@guapocado/*` packages. Pre-1.0 — while on `0.0.x`, **any
 release may contain breaking changes**. Pin exact versions.
 
+## 0.0.8
+
+All seven packages release in lockstep this version.
+
+### Added
+
+- **`@guapocado/cli`** — added `guap signup --agent`, a non-interactive flow that creates a
+  claimable Guapocado test workspace without an existing human account. The command persists the
+  restricted bootstrap credential locally, returns only the claim URL and non-secret workspace
+  metadata, and keeps a high-entropy retry handle so an interrupted registration can resume
+  without creating a duplicate workspace.
+
+### Security
+
+- **`@guapocado/cli`** — `.guapocado/credentials.json` is written with owner-only `0600`
+  permissions and its directory with `0700` permissions on POSIX systems. Agent-signup output
+  never includes the API key.
+
 ## 0.0.7
 
 All seven packages release in lockstep this version.

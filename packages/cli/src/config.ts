@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import consola from "consola";
 
-const GUAPOCADO_API_BASE_URL = "https://api.guapocado.dev";
+export const GUAPOCADO_API_BASE_URL = "https://api.guapocado.dev";
 
 /**
  * Canonical environment / target names, matching the platform's test/live
@@ -45,6 +45,11 @@ export type StoredConfig = {
 	environments?: Record<string, StoredEnvKey>;
 	apiKey?: string;
 	defaultEnvironment?: string;
+	/** High-entropy retry handle for an in-flight agent-native signup. */
+	pendingAgentRegistration?: {
+		clientId: string;
+		workspaceName: string;
+	};
 };
 
 type DotEnv = Record<string, string>;
@@ -63,7 +68,12 @@ export function localCredentialsPath(cwd = process.cwd()): string {
 
 export function ensureLocalCredentialsDir(cwd = process.cwd()): string {
 	const configDir = join(cwd, ".guapocado");
-	mkdirSync(configDir, { recursive: true });
+	mkdirSync(configDir, { recursive: true, mode: 0o700 });
+	try {
+		chmodSync(configDir, 0o700);
+	} catch {
+		// POSIX modes are unsupported on some platforms (notably Windows).
+	}
 	return join(configDir, "credentials.json");
 }
 
@@ -96,7 +106,15 @@ export function readStoredConfig(cwd = process.cwd()): StoredConfig {
 
 export function writeStoredConfig(config: StoredConfig, cwd = process.cwd()): string {
 	const path = ensureLocalCredentialsDir(cwd);
-	writeFileSync(path, `${JSON.stringify(config, null, "\t")}\n`, "utf-8");
+	writeFileSync(path, `${JSON.stringify(config, null, "\t")}\n`, {
+		encoding: "utf-8",
+		mode: 0o600,
+	});
+	try {
+		chmodSync(path, 0o600);
+	} catch {
+		// POSIX modes are unsupported on some platforms (notably Windows).
+	}
 	return path;
 }
 
