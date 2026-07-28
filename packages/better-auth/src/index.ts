@@ -57,11 +57,22 @@ type BetterAuthInitContext = {
 
 /** Options for installing Guapocado into a Better Auth server. */
 export type GuapocadoBetterAuthOptions = Omit<GuapocadoClientOptions, "customerId"> & {
+	/**
+	 * Better Auth entity used as the billing customer. Built-in sources use the
+	 * entity's native ID unchanged, so the active organization's ID is also the
+	 * Guapocado customer ID.
+	 *
+	 * Use `mapCustomerId` to add a namespace or map the native ID to a dedicated
+	 * billing ID. `resolveCustomerId` returns an already-final customer ID and
+	 * bypasses `mapCustomerId`.
+	 */
 	customerId?:
 		| BetterAuthCustomerIdSource
 		| ((session: BetterAuthSession) => string | null | undefined);
+	/** Returns an already-final customer ID and bypasses `mapCustomerId`. */
 	resolveCustomerId?: (session: BetterAuthSession) => string | null | undefined;
 	debug?: boolean;
+	/** Maps the selected source and native ID to a different, final customer ID. */
 	mapCustomerId?: (input: {
 		source: BetterAuthCustomerIdSource | "custom";
 		id: string;
@@ -214,16 +225,6 @@ const guapocadoPluginSchema = {
 	},
 } as const;
 
-function defaultCustomerId({
-	source,
-	id,
-}: {
-	source: BetterAuthCustomerIdSource | "custom";
-	id: string;
-}): string {
-	return `${source}_${id}`.replaceAll(/[^a-zA-Z0-9_-]/g, "_").slice(0, 128);
-}
-
 function resolveCustomerIdSource(
 	session: BetterAuthSession,
 	source: GuapocadoBetterAuthOptions["customerId"],
@@ -260,10 +261,7 @@ function resolveGuapocadoContext(
 	const customerId =
 		overrideCustomerId ??
 		options.resolveCustomerId?.(session) ??
-		(resolved
-			? (options.mapCustomerId?.({ ...resolved, session }) ??
-				defaultCustomerId({ source: resolved.source, id: resolved.id }))
-			: null);
+		(resolved ? (options.mapCustomerId?.({ ...resolved, session }) ?? resolved.id) : null);
 	if (!customerId) return null;
 
 	const guap = createGuapocadoClient({
@@ -653,8 +651,9 @@ async function timed<T>(
  * and verifies Guapocado webhooks for projection into the auth database.
  *
  * The `customerId` option selects which session entity becomes the billing
- * customer (e.g. `"user"`, `"organization"`, or `"team"`), and the `webhook`
- * option configures the receiving path and registration behavior.
+ * customer (e.g. `"user"`, `"organization"`, or `"team"`) and uses that
+ * entity's native ID unchanged unless `mapCustomerId` is provided. The
+ * `webhook` option configures the receiving path and registration behavior.
  *
  * @param options - Plugin configuration: the Guapocado `apiKey`, a `customerId`
  *   source or resolver, optional `mapCustomerId`/`resolveCustomerId` overrides,

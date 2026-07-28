@@ -705,9 +705,10 @@ export const auth = betterAuth({
 });
 ```
 
-By default, Better Auth maps the selected user, organization, or team ID to
-`customerId`. Override `mapCustomerId` if you store dedicated Guapocado customer
-IDs.
+By default, Better Auth uses the selected user, organization, or team ID
+unchanged as `customerId`. That means raw-SDK code can pass the same native ID.
+Override `mapCustomerId` if you need a namespace or store dedicated Guapocado
+customer IDs.
 
 ## React integration
 

@@ -92,9 +92,36 @@ await auth.api.guapocadoUsageRefund({
 });
 ```
 
-By default, the plugin maps the selected user, organization, or team ID to
-`customerId`. Override `mapCustomerId` if you store dedicated Guapocado customer
-IDs.
+The `customerId` option selects a source. By default, the plugin uses that
+source's native ID unchanged. If the active organization ID is `abc`, the
+Guapocado customer ID is also `abc`. Raw-SDK code can pass the same value:
+
+```typescript
+import { createGuapocadoClient } from "@guapocado/sdk";
+
+const guap = createGuapocadoClient({
+  apiKey: process.env.GUAPOCADO_API_KEY!,
+  customerId: organization.id,
+});
+```
+
+This includes cron jobs, queues, webhook handlers, signup hooks, and admin
+tools—code paths where Better Auth has no HTTP session to resolve.
+
+Use `mapCustomerId` when you intentionally want a namespace or store dedicated
+Guapocado customer IDs:
+
+```typescript
+guapocado({
+  apiKey: process.env.GUAPOCADO_API_KEY!,
+  customerId: "organization",
+  mapCustomerId: ({ source, id }) => `${source}_${id}`,
+});
+```
+
+`resolveCustomerId` is different: it returns an already-final customer ID and
+bypasses `mapCustomerId`. A function passed directly as `customerId` also uses
+its returned ID unchanged unless `mapCustomerId` is configured.
 
 `customerId: "organization"` requires Better Auth's `organization()` plugin.
 `customerId: "team"` requires `organization({ teams: { enabled: true } })`.
