@@ -47,6 +47,43 @@ describe("server plugin schema", () => {
 	});
 });
 
+describe("server plugin customer IDs", () => {
+	const session = {
+		user: { id: "user-uuid" },
+		session: { activeOrganizationId: "organization-uuid" },
+	};
+
+	async function resolvedCustomerId(
+		options: Parameters<typeof guapocado>[0],
+	): Promise<string | undefined> {
+		const endpoint = guapocado(options).endpoints.guapocadoCustomer;
+		const result = await endpoint({
+			context: { session },
+			json: (body: unknown) => body,
+		} as never);
+		return (result as { customerId?: string }).customerId;
+	}
+
+	it("uses the selected entity's native ID unchanged", async () => {
+		await expect(resolvedCustomerId({ apiKey: "k", customerId: "organization" })).resolves.toBe(
+			"organization-uuid",
+		);
+		await expect(resolvedCustomerId({ apiKey: "k", customerId: "user" })).resolves.toBe(
+			"user-uuid",
+		);
+	});
+
+	it("supports explicit namespacing through mapCustomerId", async () => {
+		await expect(
+			resolvedCustomerId({
+				apiKey: "k",
+				customerId: "organization",
+				mapCustomerId: ({ id }) => `billing_${id}`,
+			}),
+		).resolves.toBe("billing_organization-uuid");
+	});
+});
+
 describe("client plugin actions return { data, error }", () => {
 	type FakeFetch = (
 		path: string,

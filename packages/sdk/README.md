@@ -72,8 +72,8 @@ defaults to the matching API contract it was built and typed against.
 The client sends these headers automatically on every managed API request:
 
 ```text
-Guapocado-Version: 0.0.9
-Guapocado-SDK-Version: 0.0.9
+Guapocado-Version: 0.0.10
+Guapocado-SDK-Version: 0.0.10
 Guapocado-SDK-Language: typescript
 ```
 
@@ -83,9 +83,9 @@ omit `Guapocado-Version` use the environment's pinned default.
 
 Existing API contracts are immutable. A new response shape or validation rule
 that could break an integration ships under a new semantic version while the
-old contract remains available. Documented SDK behavior is also kept compatible
-across `0.0.x` releases from `0.0.9` onward; an intentional breaking SDK change
-will move the package to `1.0.0` and use major versions after that.
+old contract remains available. Guapocado is pre-1.0, so `0.0.x` SDK releases
+may contain breaking changes; pin exact versions and review the changelog before
+upgrading.
 
 You can inspect the versions compiled into the package:
 
@@ -104,7 +104,7 @@ installed SDK cannot request a contract whose response shapes it does not know:
 ```typescript
 const guap = createGuapocadoClient({
   apiKey: process.env.GUAPOCADO_API_KEY!,
-  version: "0.0.9",
+  version: "0.0.10",
 });
 ```
 
@@ -705,9 +705,10 @@ export const auth = betterAuth({
 });
 ```
 
-By default, Better Auth maps the selected user, organization, or team ID to
-`customerId`. Override `mapCustomerId` if you store dedicated Guapocado customer
-IDs.
+By default, Better Auth uses the selected user, organization, or team ID
+unchanged as `customerId`. That means raw-SDK code can pass the same native ID.
+Override `mapCustomerId` if you need a namespace or store dedicated Guapocado
+customer IDs.
 
 ## React integration
 

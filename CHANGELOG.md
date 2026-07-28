@@ -1,10 +1,20 @@
 # Changelog
 
-All notable changes to the `@guapocado/*` packages. Packages follow semantic
-versioning. From `0.0.9` onward, documented SDK behavior remains backwards
-compatible across `0.0.x` releases; an intentional breaking SDK change will
-graduate the affected package to `1.0.0` (and require a major bump thereafter).
-Pin exact versions for reproducible builds.
+All notable changes to the `@guapocado/*` packages. Guapocado is pre-1.0, so a
+`0.0.x` release may contain breaking changes. Pin exact versions for
+reproducible builds and review these notes before upgrading.
+
+## 0.0.10
+
+All seven packages release in lockstep this version.
+
+### Breaking
+
+- **`@guapocado/better-auth`** — built-in `customerId` sources now preserve the
+  selected user, organization, or team ID unchanged. The plugin no longer adds
+  `user_`, `organization_`, `team_`, or `custom_` prefixes. Use
+  `mapCustomerId` when an integration intentionally needs a namespace or a
+  dedicated billing ID.
 
 ## 0.0.9
 
