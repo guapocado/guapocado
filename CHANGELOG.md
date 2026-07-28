@@ -1,7 +1,26 @@
 # Changelog
 
-All notable changes to the `@guapocado/*` packages. Pre-1.0 — while on `0.0.x`, **any
-release may contain breaking changes**. Pin exact versions.
+All notable changes to the `@guapocado/*` packages. Packages follow semantic
+versioning. From `0.0.9` onward, documented SDK behavior remains backwards
+compatible across `0.0.x` releases; an intentional breaking SDK change will
+graduate the affected package to `1.0.0` (and require a major bump thereafter).
+Pin exact versions for reproducible builds.
+
+## 0.0.9
+
+All seven packages release in lockstep this version.
+
+### Added
+
+- **`@guapocado/sdk`** — Stripe-style request versioning. Every request now sends an API contract
+  version equal to the SDK package version in `Guapocado-Version`, plus the package version and
+  language in `Guapocado-SDK-Version` and `Guapocado-SDK-Language`. The exported
+  `GUAPOCADO_API_VERSION`, `GUAPOCADO_SDK_VERSION`, and `GUAPOCADO_COMPATIBLE_VERSIONS` constants
+  expose those values. The optional `version` client option defaults to the installed SDK version
+  and rejects contracts this SDK has not declared compatible.
+- **`@guapocado/cli`** — `/v1` requests now send the CLI package version as both its API contract
+  and client version (`Guapocado-SDK-Language: cli`), so CLI adoption appears in the platform's
+  compatibility report alongside SDK traffic.
 
 ## 0.0.8
 

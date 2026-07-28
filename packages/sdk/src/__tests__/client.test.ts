@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	GUAPOCADO_API_VERSION,
+	GUAPOCADO_COMPATIBLE_VERSIONS,
+	GUAPOCADO_SDK_VERSION,
 	type GuapAdapter,
 	GuapocadoAuthError,
 	GuapocadoRateLimitError,
@@ -55,7 +58,7 @@ describe("construction", () => {
 describe("request shaping", () => {
 	const guap = () => createGuapocadoClient({ apiKey: "sk_test_1", customerId: "org_1" });
 
-	it("sends the key + content-type headers and the default base URL", async () => {
+	it("sends authentication, API-version, SDK-version, and content-type headers", async () => {
 		fetchMock.mockResolvedValueOnce(jsonResponse(true));
 		await guap().has("analytics");
 		const url = reqUrl(0);
@@ -64,7 +67,32 @@ describe("request shaping", () => {
 		expect(init?.method ?? "GET").toBe("GET"); // GETs rely on fetch's default method
 		const headers = init?.headers as Record<string, string>;
 		expect(headers["x-guapocado-key"]).toBe("sk_test_1");
+		expect(headers["Guapocado-Version"]).toBe(GUAPOCADO_API_VERSION);
+		expect(headers["Guapocado-SDK-Version"]).toBe(GUAPOCADO_SDK_VERSION);
+		expect(headers["Guapocado-SDK-Language"]).toBe("typescript");
 		expect(headers["content-type"]).toBe("application/json");
+	});
+
+	it("accepts an explicitly selected compatible version", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse(true));
+		const client = createGuapocadoClient({
+			apiKey: "k",
+			customerId: "org_1",
+			version: GUAPOCADO_COMPATIBLE_VERSIONS[0],
+		});
+		await client.has("analytics");
+		const headers = reqInit(0)?.headers as Record<string, string>;
+		expect(headers["Guapocado-Version"]).toBe(GUAPOCADO_SDK_VERSION);
+	});
+
+	it("rejects a version the installed SDK does not support", () => {
+		expect(() =>
+			createGuapocadoClient({
+				apiKey: "k",
+				// @ts-expect-error Exercise the runtime guard used for plain JavaScript callers.
+				version: "9.9.9",
+			}),
+		).toThrow(/not compatible/);
 	});
 
 	it("honors a custom apiUrl and url-encodes keys", async () => {

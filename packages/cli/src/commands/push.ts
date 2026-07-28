@@ -1,6 +1,7 @@
 import { type BillingConfig, diffConfigs, toCanonical } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
+import { guapocadoApiHeaders } from "../api-headers.js";
 import { loadBillingConfig } from "../billing-config.js";
 import { loadTargetConfig, resolveEnvironment } from "../config.js";
 import { printDiff } from "../format-diff.js";
@@ -66,7 +67,7 @@ export default defineCommand({
 		let remote: BillingConfig | null = null;
 		try {
 			const res = await fetch(`${config.baseUrl}/v1/sync/pull`, {
-				headers: { "x-guapocado-key": config.apiKey },
+				headers: guapocadoApiHeaders(config.apiKey),
 			});
 			if (res.ok) {
 				const data = (await res.json()) as { config: BillingConfig };
@@ -95,10 +96,9 @@ export default defineCommand({
 		consola.info(`Pushing to ${config.environment}...`);
 		const res = await fetch(`${config.baseUrl}/v1/sync/push`, {
 			method: "POST",
-			headers: {
-				"x-guapocado-key": config.apiKey,
+			headers: guapocadoApiHeaders(config.apiKey, {
 				"content-type": "application/json",
-			},
+			}),
 			body: JSON.stringify({ config: canonical }),
 		});
 

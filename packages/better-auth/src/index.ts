@@ -269,6 +269,7 @@ function resolveGuapocadoContext(
 	const guap = createGuapocadoClient({
 		apiKey: options.apiKey,
 		apiUrl: options.apiUrl,
+		version: options.version,
 		customerId,
 	});
 
@@ -432,6 +433,7 @@ async function registerWebhookEndpoint(
 	const guap = createGuapocadoClient({
 		apiKey,
 		apiUrl: options.apiUrl,
+		version: options.version,
 	});
 	const registration = await guap.webhooks.register({
 		url,
@@ -898,6 +900,7 @@ export function guapocado(options: GuapocadoBetterAuthOptions) {
 					const guap = createGuapocadoClient({
 						apiKey: options.apiKey,
 						apiUrl: options.apiUrl,
+						version: options.version,
 					});
 					const plans = await platformCall(() => guap.plans.list());
 					return ctx.json({ plans });

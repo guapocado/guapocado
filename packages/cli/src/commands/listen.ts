@@ -1,6 +1,7 @@
 import type { BillingConfig } from "@guapocado/shared";
 import { defineCommand } from "citty";
 import consola from "consola";
+import { guapocadoApiHeaders } from "../api-headers.js";
 import { loadBillingConfig } from "../billing-config.js";
 import { loadTargetConfig } from "../config.js";
 
@@ -200,10 +201,9 @@ async function startRelaySession(input: {
 }): Promise<DevRelaySession> {
 	const response = await fetch(`${input.baseUrl}/v1/dev-relay/session`, {
 		method: "POST",
-		headers: {
+		headers: guapocadoApiHeaders(input.apiKey, {
 			"content-type": "application/json",
-			"x-guapocado-key": input.apiKey,
-		},
+		}),
 		body: JSON.stringify({ registrationKey: input.registrationKey }),
 	});
 	if (!response.ok) {

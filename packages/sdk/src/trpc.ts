@@ -1,4 +1,4 @@
-import { createGuapocadoClient } from "./client.js";
+import { type GuapocadoClientOptions, createGuapocadoClient } from "./client.js";
 
 type ProcedureHandler = (fn: (opts: { input: never }) => unknown) => unknown;
 
@@ -42,7 +42,7 @@ type TrpcLike = {
  */
 export function createGuapocadoTrpcRouter(
 	t: TrpcLike,
-	opts: { apiKey: string },
+	opts: GuapocadoClientOptions,
 	z: {
 		object: (shape: Record<string, unknown>) => unknown;
 		string: () => { optional: () => unknown };

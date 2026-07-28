@@ -297,6 +297,8 @@ export type GuapWebhookHooks = {
 export type GuapLocalOptions = {
 	apiKey: string;
 	apiUrl?: string;
+	/** Compatible API contract forwarded to the underlying SDK client. */
+	version?: GuapocadoClientOptions["version"];
 	/** Backing storage. Defaults to {@link createMemoryGuapStore}, which is process-local and non-durable. */
 	store?: GuapStore;
 	/** Serve a local record only if it was written within this many ms; unset means no expiry. */
@@ -939,7 +941,11 @@ export function createGuapLocal(options: GuapLocalOptions): GuapLocal {
 	const maxAgeMs = options.maxAgeMs;
 	const constructorHooks = options.hooks ?? {};
 	const autoRegisterEnabled = options.webhook?.autoRegister ?? true;
-	const apiClient = createGuapocadoClient({ apiKey: options.apiKey, apiUrl: options.apiUrl });
+	const apiClient = createGuapocadoClient({
+		apiKey: options.apiKey,
+		apiUrl: options.apiUrl,
+		version: options.version,
+	});
 
 	let lastReRegisterAt = 0;
 	function canReRegister(): boolean {
@@ -1320,7 +1326,7 @@ export function createGuapLocal(options: GuapLocalOptions): GuapLocal {
  * ```
  */
 export function createGuapocadoClientWithLocal(
-	options: GuapocadoClientOptions & Omit<GuapLocalOptions, "apiKey" | "apiUrl">,
+	options: GuapocadoClientOptions & Omit<GuapLocalOptions, "apiKey" | "apiUrl" | "version">,
 ): GuapocadoClient & {
 	handler: (hooks?: GuapWebhookHooks) => (request: Request) => Promise<Response>;
 } {
@@ -1328,6 +1334,7 @@ export function createGuapocadoClientWithLocal(
 	const local = createGuapLocal({
 		apiKey: clientOptions.apiKey,
 		apiUrl: clientOptions.apiUrl,
+		version: clientOptions.version,
 		store,
 		maxAgeMs,
 		webhook,

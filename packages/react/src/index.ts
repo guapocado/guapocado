@@ -99,18 +99,29 @@ const GuapocadoContext = createContext<ReadOnlyGuapocadoClient | null>(null);
  * ```
  */
 export function GuapocadoProvider({
+	adapter,
 	apiKey,
+	apiUrl,
 	children,
 	client,
 	customerId,
+	readModel,
+	version,
 }: GuapocadoProviderProps) {
 	const guap = useMemo(() => {
 		if (client) return client;
 		if (!apiKey) {
 			throw new Error("GuapocadoProvider requires either a client or an apiKey.");
 		}
-		return createReadOnlyGuapocadoClient({ apiKey, customerId });
-	}, [apiKey, client, customerId]);
+		return createReadOnlyGuapocadoClient({
+			apiKey,
+			apiUrl,
+			customerId,
+			adapter,
+			readModel,
+			version,
+		});
+	}, [adapter, apiKey, apiUrl, client, customerId, readModel, version]);
 
 	return createElement(GuapocadoContext.Provider, { value: guap }, children);
 }
