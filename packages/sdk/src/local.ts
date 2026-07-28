@@ -127,6 +127,7 @@ export type GuapPurchaseSnapshot = {
 	stripePaymentIntentId?: string | null;
 	status: PurchaseStatus;
 	amount: number;
+	amountRefunded?: number;
 	currency: string;
 	quantity: number;
 	completedAt?: string | null;

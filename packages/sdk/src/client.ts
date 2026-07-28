@@ -101,7 +101,7 @@ export type Product = Omit<BillingPlan, "config"> & {
 export type GuapocadoPlan = Product;
 
 /** Purchase status values normalized from completed one-time checkout payments. */
-export type PurchaseStatus = "pending" | "completed" | "failed" | "refunded";
+export type PurchaseStatus = "pending" | "completed" | "failed" | "partially_refunded" | "refunded";
 
 /** One-time purchase record returned by the Guapocado API. */
 export type Purchase = {
@@ -110,6 +110,7 @@ export type Purchase = {
 	productKey: string;
 	status: PurchaseStatus;
 	amount: number;
+	amountRefunded?: number;
 	currency: string;
 	quantity: number;
 	stripeCheckoutSessionId?: string | null;
@@ -136,8 +137,49 @@ export type Subscription = {
 	status: SubscriptionStatus;
 	stripeSubscriptionId?: string | null;
 	currentPeriodEnd?: string | null;
+	currentPeriodStart?: string | null;
 	createdAt?: string | null;
 	updatedAt?: string | null;
+};
+
+/** Lifecycle state of a durable cash refund. */
+export type RefundStatus = "pending" | "succeeded" | "failed" | "canceled";
+
+/** Refund policy selected for a purchase or subscription. */
+export type RefundMode = "full" | "prorated";
+
+/** Durable cash refund returned by the Guapocado API. */
+export type Refund = {
+	id: string;
+	customerId: string;
+	purchaseId?: string | null;
+	subscriptionId?: string | null;
+	invoiceId?: string | null;
+	kind: "purchase" | "subscription";
+	mode: RefundMode;
+	status: RefundStatus;
+	amount: number;
+	currency: string;
+	stripeRefundId?: string | null;
+	stripePaymentIntentId?: string | null;
+	idempotencyKey: string;
+	reason?: string | null;
+	periodStart?: string | null;
+	periodEnd?: string | null;
+	effectiveAt: string;
+	originalEntitlementAmount?: number | null;
+	remainingEntitlementAmount?: number | null;
+	error?: string | null;
+	completedAt?: string | null;
+	createdAt?: string | null;
+	updatedAt?: string | null;
+};
+
+/** Input shared by purchase and subscription cash-refund operations. */
+export type RefundInput = {
+	mode?: RefundMode;
+	idempotencyKey: string;
+	reason?: string;
 };
 
 /** Customer subscription record returned by the Guapocado API. */
@@ -159,6 +201,12 @@ export type CustomerScopedOptions = {
 /** Options for `usage.consume`, including an idempotency key for retry-safe consumption. */
 export type ConsumeOptions = CustomerScopedOptions & {
 	/** Dedupe key — repeated consume calls with the same key are applied at most once. */
+	idempotencyKey?: string;
+};
+
+/** Options for `usage.refund`, including a key for retry-safe exact-source reversal. */
+export type UsageRefundOptions = CustomerScopedOptions & {
+	/** Dedupe key — repeated refund calls with the same key are applied at most once. */
 	idempotencyKey?: string;
 };
 
@@ -419,7 +467,7 @@ export type UsageClient = {
 		settings: UsageSettings,
 		options?: CustomerScopedOptions,
 	): Promise<UsageBalance>;
-	refund(key: string, amount: number, options?: CustomerScopedOptions): Promise<UsageBalance>;
+	refund(key: string, amount: number, options?: UsageRefundOptions): Promise<UsageBalance>;
 };
 
 /** Usage operations exposed by read-only client keys. */
@@ -454,10 +502,12 @@ export type BillingClient = ReadOnlyBillingClient & {
 	};
 	purchases: {
 		list(options?: CustomerScopedOptions): Promise<Purchase[]>;
+		refund(purchaseId: string, input: RefundInput): Promise<Refund>;
 	};
 	subscription: {
 		current(options?: CustomerScopedOptions): Promise<Subscription | null>;
 		change(planKey: string, options?: CustomerScopedOptions): Promise<SubscriptionChange>;
+		refund(subscriptionId: string, input: RefundInput): Promise<Refund>;
 	};
 	checkout: {
 		create(session: {
@@ -819,7 +869,13 @@ export function createGuapocadoClient(options: GuapocadoClientOptions): Guapocad
 				const customerId = resolveCustomerId(options.customerId, scopedOptions?.customerId);
 				return request<UsageBalance>(`/v1/usage/${encodeURIComponent(key)}/refund`, {
 					method: "POST",
-					body: JSON.stringify({ customerId, amount }),
+					body: JSON.stringify({
+						customerId,
+						amount,
+						...(scopedOptions?.idempotencyKey
+							? { idempotencyKey: scopedOptions.idempotencyKey }
+							: {}),
+					}),
 				});
 			},
 		},
@@ -896,6 +952,15 @@ export function createGuapocadoClient(options: GuapocadoClientOptions): Guapocad
 				});
 				return response.purchases;
 			},
+			refund: async (purchaseId, input) => {
+				assertNonEmpty(purchaseId, "purchaseId");
+				assertNonEmpty(input.idempotencyKey, "idempotencyKey");
+				const response = await request<{ refund: Refund }>(
+					`/v1/purchases/${encodeURIComponent(purchaseId)}/refunds`,
+					{ method: "POST", body: JSON.stringify(input) },
+				);
+				return response.refund;
+			},
 		},
 		subscription: {
 			current: async (scopedOptions) => {
@@ -927,6 +992,15 @@ export function createGuapocadoClient(options: GuapocadoClientOptions): Guapocad
 					method: "POST",
 					body: JSON.stringify({ customerId, planKey }),
 				});
+			},
+			refund: async (subscriptionId, input) => {
+				assertNonEmpty(subscriptionId, "subscriptionId");
+				assertNonEmpty(input.idempotencyKey, "idempotencyKey");
+				const response = await request<{ refund: Refund }>(
+					`/v1/subscriptions/${encodeURIComponent(subscriptionId)}/refunds`,
+					{ method: "POST", body: JSON.stringify(input) },
+				);
+				return response.refund;
 			},
 		},
 		checkout: {

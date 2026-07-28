@@ -26,7 +26,9 @@ const apiCalls = await guap.usage.balance("api-calls");
 
 // Consume or refund credits
 const updated = await guap.usage.consume("api-calls", 1);
-const refunded = await guap.usage.refund("api-calls", 1);
+const refunded = await guap.usage.refund("api-calls", 1, {
+	idempotencyKey: "usage-refund-123",
+});
 
 // Retry-safe consumption: pass an idempotency key so a retried call (timeout,
 // queue redelivery) is applied at most once.

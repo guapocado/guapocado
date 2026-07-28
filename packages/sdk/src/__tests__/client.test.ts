@@ -124,6 +124,41 @@ describe("request shaping", () => {
 		await client.usage.consume("api-calls", 5, { idempotencyKey: "req_1" });
 		expect(lastBody()).toEqual({ customerId: "org_1", amount: 5, idempotencyKey: "req_1" });
 	});
+
+	it("posts retry-safe usage refunds", async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ balance: 10 }));
+		await guap().usage.refund("api-calls", 2, { idempotencyKey: "usage-refund-1" });
+		expect(reqInit(0)?.method).toBe("POST");
+		expect(lastBody()).toEqual({
+			customerId: "org_1",
+			amount: 2,
+			idempotencyKey: "usage-refund-1",
+		});
+	});
+
+	it("posts idempotent purchase and subscription refunds", async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ refund: { id: "ref_1" } }));
+		const client = guap();
+		await client.purchases.refund("pur_1", {
+			mode: "prorated",
+			idempotencyKey: "refund-purchase-1",
+			reason: "unused credits",
+		});
+		expect(reqUrl(0)).toBe("https://api.guapocado.dev/v1/purchases/pur_1/refunds");
+		expect(reqInit(0)?.method).toBe("POST");
+		expect(lastBody()).toEqual({
+			mode: "prorated",
+			idempotencyKey: "refund-purchase-1",
+			reason: "unused credits",
+		});
+
+		await client.subscription.refund("sub_1", {
+			idempotencyKey: "refund-subscription-1",
+		});
+		expect(reqUrl(1)).toBe("https://api.guapocado.dev/v1/subscriptions/sub_1/refunds");
+		expect(reqInit(1)?.method).toBe("POST");
+		expect(lastBody()).toEqual({ idempotencyKey: "refund-subscription-1" });
+	});
 });
 
 describe("input validation (before any request)", () => {
@@ -154,6 +189,11 @@ describe("input validation (before any request)", () => {
 		await expectValidation(() =>
 			guap.checkout.create({ successUrl: "", cancelUrl: "", productKey: "" }),
 		);
+	});
+
+	it("requires refund resource ids and idempotency keys", async () => {
+		await expectValidation(() => guap.purchases.refund("", { idempotencyKey: "refund-1" }));
+		await expectValidation(() => guap.subscription.refund("sub_1", { idempotencyKey: "" }));
 	});
 
 	it("does not call fetch when validation fails", async () => {
