@@ -61,6 +61,19 @@ npm view @guapocado/sdk@latest --json   # look for the dist.attestations block
 ```
 On npmjs.com each package page shows a **Provenance** panel linking to the building commit.
 
+## Agent skill
+
+Install the Guapocado Agent Skill to help Codex and other skills-compatible coding agents model,
+implement, review, and troubleshoot Guapocado billing integrations:
+
+```bash
+npx skills add https://github.com/guapocado/guapocado --skill guapocado
+```
+
+The skill is portable and auditable at [`skills/guapocado`](./skills/guapocado). It teaches agents
+to retrieve current documentation and installed package types, choose the appropriate billing
+primitives and framework adapters, start in test mode, and protect credentials and live state.
+
 ## Develop
 
 ```bash

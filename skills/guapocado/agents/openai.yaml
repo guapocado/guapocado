@@ -1,0 +1,4 @@
+interface:
+  display_name: "Guapocado"
+  short_description: "Build and review Guapocado billing integrations"
+  default_prompt: "Use $guapocado to integrate Guapocado billing into this application safely."
