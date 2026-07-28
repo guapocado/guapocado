@@ -121,9 +121,29 @@ export function createGuapocadoTrpcRouter(
 						}),
 				),
 			refund: t.procedure
-				.input(z.object({ key: z.string(), customerId: z.string(), amount: z.number() }))
-				.mutation(({ input }: { input: { key: string; customerId: string; amount: number } }) =>
-					guap.usage.refund(input.key, input.amount, { customerId: input.customerId }),
+				.input(
+					z.object({
+						key: z.string(),
+						customerId: z.string(),
+						amount: z.number(),
+						idempotencyKey: z.string().optional(),
+					}),
+				)
+				.mutation(
+					({
+						input,
+					}: {
+						input: {
+							key: string;
+							customerId: string;
+							amount: number;
+							idempotencyKey?: string;
+						};
+					}) =>
+						guap.usage.refund(input.key, input.amount, {
+							customerId: input.customerId,
+							idempotencyKey: input.idempotencyKey,
+						}),
 				),
 			configure: t.procedure
 				.input(

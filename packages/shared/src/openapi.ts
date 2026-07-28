@@ -128,6 +128,7 @@ export function generateOpenApiSpec(config: BillingConfig): Record<string, unkno
 									properties: {
 										customerId: { type: "string" },
 										amount: { type: "integer" },
+										idempotencyKey: { type: "string" },
 									},
 									required: ["customerId", "amount"],
 								},
@@ -259,6 +260,64 @@ export function generateOpenApiSpec(config: BillingConfig): Record<string, unkno
 						{ name: "customerId", in: "query", required: true, schema: { type: "string" } },
 					],
 					responses: { "200": { description: "Purchase list" } },
+				},
+			},
+			"/v1/purchases/{id}/refunds": {
+				post: {
+					operationId: "refundPurchase",
+					summary: "Refund a one-time purchase and revoke its remaining entitlement",
+					parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+					requestBody: {
+						required: true,
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									required: ["idempotencyKey"],
+									properties: {
+										mode: { type: "string", enum: ["full", "prorated"], default: "full" },
+										idempotencyKey: { type: "string" },
+										reason: { type: "string" },
+									},
+								},
+							},
+						},
+					},
+					responses: {
+						"200": { description: "Refund succeeded" },
+						"202": { description: "Refund pending at the payment provider" },
+					},
+				},
+			},
+			"/v1/subscriptions/{id}/refunds": {
+				post: {
+					operationId: "refundSubscription",
+					summary: "Cancel a subscription and refund its unused paid period",
+					parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+					requestBody: {
+						required: true,
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									required: ["idempotencyKey"],
+									properties: {
+										mode: {
+											type: "string",
+											enum: ["full", "prorated"],
+											default: "prorated",
+										},
+										idempotencyKey: { type: "string" },
+										reason: { type: "string" },
+									},
+								},
+							},
+						},
+					},
+					responses: {
+						"200": { description: "Subscription canceled and refund succeeded" },
+						"202": { description: "Subscription canceled and refund pending" },
+					},
 				},
 			},
 		},

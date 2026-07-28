@@ -161,8 +161,8 @@ export function createGuapocadoRouter(t: { router: Function; procedure: any }, a
 \t\t\t\t.input(z.object({ key: entitlementKeySchema, customerId: z.string(), amount: z.number() }))
 \t\t\t\t.mutation(({ input }) => guap.usage.consume(input.key, input.amount, { customerId: input.customerId })),
 \t\t\trefund: t.procedure
-\t\t\t\t.input(z.object({ key: entitlementKeySchema, customerId: z.string(), amount: z.number() }))
-\t\t\t\t.mutation(({ input }) => guap.usage.refund(input.key, input.amount, { customerId: input.customerId })),
+\t\t\t\t.input(z.object({ key: entitlementKeySchema, customerId: z.string(), amount: z.number(), idempotencyKey: z.string().optional() }))
+\t\t\t\t.mutation(({ input }) => guap.usage.refund(input.key, input.amount, { customerId: input.customerId, idempotencyKey: input.idempotencyKey })),
 \t\t\tconfigure: t.procedure
 \t\t\t\t.input(z.object({ key: entitlementKeySchema, customerId: z.string(), overageEnabled: z.boolean() }))
 \t\t\t\t.mutation(({ input }) => guap.usage.configure(input.key, { overageEnabled: input.overageEnabled }, { customerId: input.customerId })),

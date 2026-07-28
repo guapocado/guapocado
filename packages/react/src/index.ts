@@ -41,9 +41,14 @@ export type {
 	ProductPricing,
 	Purchase,
 	PurchaseStatus,
+	Refund,
+	RefundInput,
+	RefundMode,
+	RefundStatus,
 	ReadOnlyBillingClient,
 	ReadOnlyGuapocadoClient,
 	UsageBalance,
+	UsageRefundOptions,
 } from "@guapocado/sdk";
 
 /**
