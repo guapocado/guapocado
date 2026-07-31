@@ -81,7 +81,7 @@ Guapocado-SDK-Language: typescript
 
 That means installing a newer SDK is the explicit upgrade point; an existing
 deployment keeps requesting its original API contract. Raw HTTP clients that
-omit `Guapocado-Version` use the environment's pinned default.
+omit `Guapocado-Version` use the running server's current contract.
 
 Existing API contracts are immutable. A new response shape or validation rule
 that could break an integration ships under a new semantic version while the
@@ -471,13 +471,12 @@ const guap = createGuapocadoClientWithLocal({
 });
 ```
 
-### Approval gate
+### Receiver approval
 
-New webhook endpoints register `pending_approval` / `enabled: 0` until
-approved in the Guapocado dashboard — no deliveries happen until then. This is
-safe: reads keep working correctly via API miss-through in the meantime, and
-`GET` on the handler URL surfaces the current `status` so you can confirm once
-it's approved.
+New webhook endpoints register `pending_approval` and remain disabled until
+approved in the Guapocado dashboard. Reads continue to work via API
+miss-through in the meantime, and `GET` on the handler URL surfaces the current
+`status`.
 
 ### Webhook hooks
 
@@ -597,7 +596,7 @@ await guap.webhooks.register({
 });
 ```
 
-Webhook receivers are created pending approval in the Guapocado dashboard.
+Webhook receivers require approval in the Guapocado dashboard.
 
 ## Enterprise deals (per-customer custom pricing)
 

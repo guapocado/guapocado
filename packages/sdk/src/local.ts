@@ -885,8 +885,8 @@ const REREGISTER_COOLDOWN_MS = 5 * 60_000;
  * a `project` seam for tests/custom transports, and an explicit `register`.
  * Auto-registers the webhook endpoint lazily (on first GET, first POST, or an
  * explicit `register()` call) unless `webhook.autoRegister` is `false`. New
- * endpoints start `pending_approval` in the Guapocado dashboard — reads keep
- * working correctly via miss-through to the API in the meantime.
+ * endpoints start `pending_approval` in the Guapocado dashboard. Reads keep
+ * working correctly via miss-through to the API while approval is pending.
  *
  * **`webhook.publicUrl` is required for auto-registration.** The registration
  * URL is never derived from request data by default — a webhook endpoint

@@ -162,7 +162,7 @@ Guapocado state. Raw Stripe event IDs are kept as internal source metadata, so
 receivers can store verified Guapocado events without replaying Stripe logic.
 
 With `devTunnel: true`, `guap listen --test --dev` can start the dev-only
-relay and forward approved test events to your local receiver.
+relay and forward test events after the receiver is approved in the dashboard.
 
 Then enable the receiver in the Better Auth plugin. No webhook signing secret is
 required in user config; the plugin registers the receiver with Guapocado and
