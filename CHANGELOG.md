@@ -4,6 +4,19 @@ All notable changes to the `@guapocado/*` packages. Guapocado is pre-1.0, so a
 `0.0.x` release may contain breaking changes. Pin exact versions for
 reproducible builds and review these notes before upgrading.
 
+## 0.0.11
+
+All seven packages release in lockstep this version. SDK and framework behavior
+is unchanged; their version bump aligns them with the immutable `0.0.11` API
+contract alias.
+
+### Added
+
+- **`@guapocado/cli`** — agent-signup JSON now identifies the returned tenant as
+  `provisionalWorkspaceId`. After claim, `push`, `pull`, and `plan` automatically
+  reconcile local credentials to the permanent organization ID and name reported
+  by the API, while preserving the same restricted test bootstrap key.
+
 ## 0.0.10
 
 All seven packages release in lockstep this version.

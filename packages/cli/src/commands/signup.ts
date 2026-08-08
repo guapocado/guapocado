@@ -11,6 +11,7 @@ import { hintGitignore } from "../hints.js";
 
 type RegistrationResponse = {
 	registrationId: string;
+	provisionalWorkspaceId?: string;
 	workspaceId: string;
 	workspaceName: string;
 	environment: "test";
@@ -90,6 +91,7 @@ export async function signupAgent(input: {
 
 	return {
 		registrationId: registration.registrationId,
+		provisionalWorkspaceId: registration.provisionalWorkspaceId ?? registration.workspaceId,
 		workspaceId: registration.workspaceId,
 		workspaceName: registration.workspaceName,
 		environment: registration.environment,

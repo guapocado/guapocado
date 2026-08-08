@@ -1,7 +1,7 @@
 import packageJson from "../package.json";
 
 /** Semantic version of the installed `@guapocado/sdk` package. */
-export const GUAPOCADO_SDK_VERSION = "0.0.10";
+export const GUAPOCADO_SDK_VERSION = "0.0.11";
 
 if (packageJson.version !== GUAPOCADO_SDK_VERSION) {
 	throw new Error(

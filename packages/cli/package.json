@@ -1,6 +1,6 @@
 {
 	"name": "@guapocado/cli",
-	"version": "0.0.10",
+	"version": "0.0.11",
 	"type": "module",
 	"bin": {
 		"guap": "./dist/index.js",

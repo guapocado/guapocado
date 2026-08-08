@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import consola from "consola";
 import { guapocadoApiHeaders } from "../api-headers.js";
 import { loadBillingConfig } from "../billing-config.js";
-import { loadTargetConfig, resolveEnvironment } from "../config.js";
+import { loadTargetConfig, reconcileCanonicalWorkspace, resolveEnvironment } from "../config.js";
 import { printDiff } from "../format-diff.js";
 import { hintGitignore } from "../hints.js";
 
@@ -69,6 +69,7 @@ export default defineCommand({
 			const res = await fetch(`${config.baseUrl}/v1/sync/pull`, {
 				headers: guapocadoApiHeaders(config.apiKey),
 			});
+			reconcileCanonicalWorkspace(res, config.apiKey);
 			if (res.ok) {
 				const data = (await res.json()) as { config: BillingConfig };
 				remote = data.config;
@@ -101,6 +102,7 @@ export default defineCommand({
 			}),
 			body: JSON.stringify({ config: canonical }),
 		});
+		reconcileCanonicalWorkspace(res, config.apiKey);
 
 		if (!res.ok) {
 			const err = await res.text();

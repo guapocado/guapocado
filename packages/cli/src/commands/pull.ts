@@ -4,7 +4,7 @@ import { BILLING_SCHEMA_VERSION, type BillingConfig, toCanonical } from "@guapoc
 import { defineCommand } from "citty";
 import consola from "consola";
 import { guapocadoApiHeaders } from "../api-headers.js";
-import { loadTargetConfig, resolveEnvironment } from "../config.js";
+import { loadTargetConfig, reconcileCanonicalWorkspace, resolveEnvironment } from "../config.js";
 import { hintGitignore } from "../hints.js";
 
 function toTypeScript(config: BillingConfig): string {
@@ -88,6 +88,7 @@ export default defineCommand({
 		const res = await fetch(`${config.baseUrl}/v1/sync/pull`, {
 			headers: guapocadoApiHeaders(config.apiKey),
 		});
+		reconcileCanonicalWorkspace(res, config.apiKey);
 		if (!res.ok) {
 			consola.error(`Failed to pull: ${res.status} ${res.statusText}`);
 			return;

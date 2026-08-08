@@ -18,6 +18,8 @@ import {
 	normalizeEnvironmentName,
 	readDotEnvApiKey,
 	readEnvironmentKey,
+	readStoredConfig,
+	reconcileCanonicalWorkspace,
 	resolveEnvironment,
 	resolveStoredKey,
 	setActiveWorkspace,
@@ -247,6 +249,41 @@ describe("workspace credentials", () => {
 			test: { apiKey: "sk_guap_test_old" },
 			live: { apiKey: "sk_guap_live_a" },
 		});
+	});
+
+	it("reconciles a provisional workspace to the permanent organization from API headers", () => {
+		const dir = mkdtempSync(join(tmpdir(), "guap-reconcile-workspace-"));
+		try {
+			writeStoredConfig(
+				{
+					activeWorkspace: "ten_provisional",
+					workspaces: {
+						ten_provisional: {
+							name: "Agent workspace",
+							environments: { test: { apiKey: "sk_guap_test_agent" } },
+						},
+					},
+				},
+				dir,
+			);
+			const response = new Response(null, {
+				headers: {
+					"Guapocado-Workspace-Id": "ten_permanent",
+					"Guapocado-Workspace-Name": encodeURIComponent("Permanent organization"),
+				},
+			});
+
+			expect(reconcileCanonicalWorkspace(response, "sk_guap_test_agent", dir)).toBe(true);
+			const reconciled = readStoredConfig(dir);
+			expect(reconciled.activeWorkspace).toBe("ten_permanent");
+			expect(reconciled.workspaces?.ten_provisional).toBeUndefined();
+			expect(reconciled.workspaces?.ten_permanent).toEqual({
+				name: "Permanent organization",
+				environments: { test: { apiKey: "sk_guap_test_agent" } },
+			});
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });
 

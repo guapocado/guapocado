@@ -27,9 +27,11 @@ npx guap signup --agent --agent-name codex --name "Product billing" --json
 npx guap push --test
 ```
 
-Agent signup creates a claimable test workspace and stores a restricted bootstrap credential. Give
-the returned claim URL to the user without exposing stored keys. Do not imply that an unclaimed
-workspace has a production environment ready for use.
+Agent signup creates a disposable provisional test workspace and stores a restricted bootstrap
+credential. Give the returned claim URL to the user without exposing stored keys. Claiming creates
+a separately identified permanent organization, adopts the existing test configuration, and
+discards the provisional tenant. Do not imply that an unclaimed workspace has a production
+environment ready for use.
 
 Use `--live` only when explicitly requested after reviewing a live plan. Do not translate a request
 to "set up billing" into an unreviewed production push.

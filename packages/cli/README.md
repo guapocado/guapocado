@@ -48,6 +48,20 @@ Show the active workspace and the credentials in use (keys are masked). Reads
 guap whoami
 ```
 
+### `guap signup --agent`
+
+Create a disposable provisional test workspace for an agent and return a claim
+URL without printing the stored bootstrap key:
+
+```bash
+guap signup --agent --agent-name codex --name "Acme billing" --json
+```
+
+Claiming creates a separately identified permanent organization and adopts the
+test configuration. The next authenticated `push`, `pull`, or `plan` updates the
+locally stored workspace ID and name automatically; the restricted bootstrap key
+does not gain live or customer access.
+
 ### `guap push`
 
 Push your local billing config to the Guapocado platform and sync to Stripe.

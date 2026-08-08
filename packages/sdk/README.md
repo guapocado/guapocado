@@ -74,8 +74,8 @@ defaults to the matching API contract it was built and typed against.
 The client sends these headers automatically on every managed API request:
 
 ```text
-Guapocado-Version: 0.0.10
-Guapocado-SDK-Version: 0.0.10
+Guapocado-Version: 0.0.11
+Guapocado-SDK-Version: 0.0.11
 Guapocado-SDK-Language: typescript
 ```
 
@@ -106,7 +106,7 @@ installed SDK cannot request a contract whose response shapes it does not know:
 ```typescript
 const guap = createGuapocadoClient({
   apiKey: process.env.GUAPOCADO_API_KEY!,
-  version: "0.0.10",
+  version: "0.0.11",
 });
 ```
 

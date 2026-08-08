@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import consola from "consola";
 import { guapocadoApiHeaders } from "../api-headers.js";
 import { loadBillingConfig } from "../billing-config.js";
-import { loadTargetConfig, resolveEnvironment } from "../config.js";
+import { loadTargetConfig, reconcileCanonicalWorkspace, resolveEnvironment } from "../config.js";
 import { printDiff } from "../format-diff.js";
 
 export default defineCommand({
@@ -58,6 +58,7 @@ export default defineCommand({
 			res = await fetch(`${config.baseUrl}/v1/sync/pull`, {
 				headers: guapocadoApiHeaders(config.apiKey),
 			});
+			reconcileCanonicalWorkspace(res, config.apiKey);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			consola.error(`Failed to reach Guapocado API at ${config.baseUrl}: ${message}`);

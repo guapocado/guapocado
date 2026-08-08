@@ -228,6 +228,58 @@ export function upsertWorkspaceKey(
 	};
 }
 
+/**
+ * Rebinds locally stored credentials when the API reports that a provisional
+ * agent workspace has been adopted by a permanent organization. Existing CLI
+ * versions safely ignore these response headers; current versions heal the
+ * local workspace id and display name after any authenticated request.
+ */
+export function reconcileCanonicalWorkspace(
+	response: Response,
+	apiKey: string,
+	cwd = process.cwd(),
+): boolean {
+	const workspaceId = response.headers.get("Guapocado-Workspace-Id")?.trim();
+	if (!workspaceId) return false;
+	const encodedName = response.headers.get("Guapocado-Workspace-Name")?.trim();
+	let workspaceName: string | undefined;
+	if (encodedName) {
+		try {
+			workspaceName = decodeURIComponent(encodedName);
+		} catch {
+			workspaceName = encodedName;
+		}
+	}
+
+	const config = readStoredConfig(cwd);
+	const sourceEntry = Object.entries(config.workspaces ?? {}).find(([, workspace]) =>
+		Object.values(workspace.environments).some((stored) => stored?.apiKey === apiKey),
+	);
+	if (!sourceEntry) return false;
+	const [sourceId, source] = sourceEntry;
+	const current = config.workspaces?.[workspaceId];
+	if (sourceId === workspaceId && (!workspaceName || source.name === workspaceName)) return false;
+
+	const workspaces = { ...(config.workspaces ?? {}) };
+	workspaces[workspaceId] = {
+		name: workspaceName ?? current?.name ?? source.name,
+		environments: {
+			...migrateLegacyEnvironments(source.environments),
+			...migrateLegacyEnvironments(current?.environments),
+		},
+	};
+	if (sourceId !== workspaceId) delete workspaces[sourceId];
+	writeStoredConfig(
+		{
+			...config,
+			workspaces,
+			activeWorkspace: config.activeWorkspace === sourceId ? workspaceId : config.activeWorkspace,
+		},
+		cwd,
+	);
+	return true;
+}
+
 /** Environments with a stored key in a workspace, aliasing legacy names. */
 function presentEnvironments(ws: WorkspaceCredentials | undefined): Environment[] {
 	const found: Environment[] = [];

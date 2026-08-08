@@ -6,7 +6,7 @@ describe("guapocadoApiHeaders", () => {
 		expect(guapocadoApiHeaders("sk_test_1")).toMatchObject({
 			"x-guapocado-key": "sk_test_1",
 			"Guapocado-Version": GUAPOCADO_CLI_API_VERSION,
-			"Guapocado-SDK-Version": "0.0.10",
+			"Guapocado-SDK-Version": "0.0.11",
 			"Guapocado-SDK-Language": "cli",
 		});
 	});
